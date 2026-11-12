@@ -1,12 +1,10 @@
+**English** · [简体中文](README.zh-CN.md)
+
 # AI-Native Learning (ainl)
 
 A Telegram assistant that sits on top of Canvas and the third-party homework platforms a course
 hands off to (WebAssign, Gradescope, ...). It finds what is due, opens it, and hands in **work
 the student has already done**, so the student spends time on the work, not on finding buttons.
-
-> 中文简介：一个架在 Canvas 和各家作业平台之上的 Telegram 助手。它负责找出要交什么、打开它，
-> 再把**学生自己做完的作业**交上去：手写答案拍照 → 识别 → 逐题预览 → 学生确认后才提交。
-> 设计文档大多是中文：`ARCHITECTURE.md`、`ONBOARDING.md`、`docs/`。
 
 ## What it does
 
@@ -47,7 +45,7 @@ Secrets go in environment variables (Windows user env) or `~/.ainl/env` (macOS; 
 | `TELEGRAM_CHAT_ID` | `python -m ainl.telegram --discover` prints it; the bot serves only this chat |
 | `GEMINI_API_KEY` | handwriting transcription (other providers in `src/ainl/mathinput/providers/`) |
 
-Then `python -m ainl.bot`. Full guide: `docs/dev-setup.md` (Chinese); macOS hosting: `docs/macos-hosting.md`.
+Then `python -m ainl.bot`. Full guide: [`docs/dev-setup.md`](docs/dev-setup.md); macOS hosting: [`docs/macos-hosting.md`](docs/macos-hosting.md).
 
 Tests (offline):
 
@@ -80,6 +78,23 @@ scripts/           service management (macOS launchd, Windows), probes, reports
 docs/              architecture, platform protocols, research notes
 tests/             offline tests with small hand-made page fixtures
 ```
+
+## Documentation languages
+
+Every document below has an English version (`X.md`, the default) and a Chinese one (`X.zh-CN.md`);
+the link at the top of each switches between them.
+
+| Document | What |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | the eight layers, the hand-in tiers, milestones |
+| [ONBOARDING.md](ONBOARDING.md) | the 60-second onboarding goal, private chat vs group, multi-user obligations |
+| [docs/dev-setup.md](docs/dev-setup.md) | setup, secrets, the two Canvas channels, the browser, the bot's commands |
+| [docs/macos-hosting.md](docs/macos-hosting.md) | running it as launchd services on a Mac mini, `/monitor` |
+| [canvas-official/README.md](canvas-official/README.md) | the official-API token channel and what REST can't do |
+| [Cookie Management/README.md](Cookie%20Management/README.md) | encrypted per-person Canvas sessions for the multi-student version |
+
+The remaining notes in `docs/` and `research/` (platform protocol captures, timing analyses, design logs) are working notes and exist
+only in their original language, mostly Chinese.
 
 ## License
 

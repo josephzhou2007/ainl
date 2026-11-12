@@ -1,54 +1,62 @@
-# Cookie Management：实现说明
+**English** · [简体中文](README.zh-CN.md)
 
-> 基于 Claude 最新代码重新核对。本轮只改写本 README，并在本目录新增独立代码及测试；没有修改 `src/`、`scale-up/` 或现有浏览器原型。新增模块尚未挂到运行中的 bot，也未部署远程登录网页。
+# Cookie Management: implementation notes
 
-## 1. 最新基础与本轮范围
+> Re-checked against Claude's latest code. This round only rewrote this README and added standalone code and tests in this directory;
+> `src/`, `scale-up/` and the existing browser prototype were not modified. The new module is not yet wired into the running bot, and the
+> remote login page is not deployed.
 
-Claude 已完成的能力直接复用：
+## 1. Starting point and scope of this round
 
-| 已有模块 | 当前能力 |
+Capabilities Claude had already built are reused directly:
+
+| Existing module | Current capability |
 |---|---|
-| `scale-up/browsers.py` | 每用户 profile、CDP 端口、按需启动；`restart(chat_id)` 只重启该用户 |
-| `src/ainl/util/browserthread.py` | 按 key 分配 worker；`using(key)` / `run(key=...)`，不同用户可并发 |
-| `src/ainl/util/pw.py` | 连接缓存按线程及 CDP 地址区分 |
-| `src/ainl/external/webassign.py` | 可注入 `cdp_url`、`launch_url`、`restart` |
-| `scale-up/onboarding.py`、`tokens.py` | 私聊注册、审批、应用 token 的哈希存储及验证 |
-| `scale-up/bot.py` | 单 Telegram receiver；主账号业务与其他用户 onboarding 分流 |
+| `scale-up/browsers.py` | per-user profile, CDP port, started on demand; `restart(chat_id)` restarts only that user |
+| `src/ainl/util/browserthread.py` | workers assigned by key; `using(key)` / `run(key=...)`, different users can run concurrently |
+| `src/ainl/util/pw.py` | connection cache keyed by thread and CDP address |
+| `src/ainl/external/webassign.py` | `cdp_url`, `launch_url`, `restart` can be injected |
+| `scale-up/onboarding.py`, `tokens.py` | private-chat registration, approval, hashed storage and verification of app tokens |
+| `scale-up/bot.py` | a single Telegram receiver; owner business traffic and other users' onboarding are split |
 
-`browsers.py` 顶部仍有“per-user worker 未完成”的旧注释，以最新 `browserthread.py` 实现为准。新用户目前仍收到 Canvas 尚未连接的提示；浏览器隔离完成不等于登录交接与业务派发已接好。
+The top of `browsers.py` still has an old comment saying "per-user worker not done"; the latest `browserthread.py` implementation is authoritative.
+New users still get the "Canvas not connected yet" message: finished browser isolation does not mean login handover and task dispatch are wired up.
 
-本轮实现的是下一层 **Canvas 会话管理库**，不是重新实现浏览器池。没有启动真实浏览器、读取现有个人 Cookie、登录学校或提交作业。
+This round implements the next layer, a **Canvas session-management library**, not a new browser pool. No real browser was started,
+no existing personal cookies were read, nothing logged in to the school or submitted homework.
 
-## 2. 新增文件
+## 2. New files
 
-| 文件 | 实现 |
+| File | What it implements |
 |---|---|
-| `cookie_management/integration.py` | `build_services()`，注入已有 registry/pool/token verifier，构建服务 |
-| `cookie_management/sessions.py` | 按用户执行探针、首次身份确认、保活检查、Cookie 恢复；对接现有 keyed worker |
-| `cookie_management/store.py` | Fernet 加密、身份绑定、版本化快照、加密临时文件与原子替换 |
-| `cookie_management/tickets.py` | 应用 token 验证后签发 5 分钟、单次使用、绑定用户及 token 版本的登录票据 |
-| `tests/test_sessions.py` | 假浏览器测试认证、隔离、轮换、恢复、异常与票据；不访问学校 |
-| `requirements.txt` | 新增加密依赖，未改根目录依赖 |
+| `cookie_management/integration.py` | `build_services()`: injects the existing registry/pool/token verifier and builds the services |
+| `cookie_management/sessions.py` | per-user probe, first-time identity confirmation, keep-alive check, cookie restore; plugs into the existing keyed workers |
+| `cookie_management/store.py` | Fernet encryption, identity binding, versioned snapshots, encrypted temp file and atomic replace |
+| `cookie_management/tickets.py` | after app-token verification, issues 5-minute, single-use login tickets bound to the user and the token version |
+| `tests/test_sessions.py` | fake-browser tests for authentication, isolation, rotation, restore, errors and tickets; never contacts the school |
+| `requirements.txt` | adds the encryption dependency; root dependencies unchanged |
 
-`SessionManager` 是进程内单实例服务：同一用户串行，不同用户独立。这个锁目前只覆盖本库调用；接入 viewer/WebAssign 时，还需在调度层建立共同的人工控制与任务锁。
+`SessionManager` is an in-process single-instance service: one user at a time, different users independent. Its lock covers only calls into this
+library; when wiring in the viewer/WebAssign, the scheduling layer also needs a shared human-control and task lock.
 
-## 3. 在现有程序中组合服务
+## 3. Composing the services in the existing program
 
-以下是未来接线示例，不是当前已上线的入口。新目录目前不在根项目的 setuptools 包发现范围内；接入入口需显式加入路径，后续再决定正式打包位置。
+The following is an example of future wiring, not a live entry point. The new directory is not inside the root project's setuptools package
+discovery; the entry point has to add the path explicitly, and the final packaging location is decided later.
 
 ```python
-# 放在未来 scale-up 入口初始化处，不能在每条请求中重新创建。
+# Put this where the future scale-up entry point initialises; never recreate it per request.
 import os
 import sys
 from pathlib import Path
 
-repo = Path(__file__).resolve().parents[1]  # 此示例假定入口在 scale-up/
+repo = Path(__file__).resolve().parents[1]  # this example assumes the entry point is in scale-up/
 sys.path.insert(0, str(repo / 'Cookie Management'))
 
 from cookie_management.integration import build_services
 import tokens
 
-# reg / pool 必须复用该进程管理业务浏览器的 Registry / BrowserPool。
+# reg / pool must reuse the Registry / BrowserPool this process uses for its business browsers.
 services = build_services(
     reg,
     pool,
@@ -58,140 +66,158 @@ services = build_services(
 )
 ```
 
-`AINL_SESSION_KEY` 必须是合法 Fernet key，由服务端安全配置提供；不要存入用户目录、Git 或聊天，也不要每次重启生成新 key。Fernet 是认证加密，密钥丢失后不能恢复旧快照。[官方说明](https://cryptography.io/en/latest/fernet/)
+`AINL_SESSION_KEY` must be a valid Fernet key supplied by secure server-side configuration; never store it in a user directory, Git or a chat,
+and never generate a new one on every restart. Fernet is authenticated encryption: if the key is lost, old snapshots cannot be recovered. [Official docs](https://cryptography.io/en/latest/fernet/)
 
-已有 `Registry` 持有内存状态，所以第一版应在一个宿主进程中共享同一 registry/pool/services。不能让独立 Web 进程各自加载旧 registry、各自分配端口；未来拆进程需经过单一 supervisor/RPC 或共享状态协调。
+The existing `Registry` holds in-memory state, so the first version should share one registry/pool/services inside a single host process.
+Separate web processes must not each load a stale registry and allocate ports on their own; splitting into processes later needs a single supervisor/RPC or shared-state coordination.
 
-## 4. 登录交接调用顺序
+## 4. Login handover call sequence
 
 ```text
-已审批同学的应用 token
+an approved classmate's app token
   → LoginTickets.issue(app_token)
-  → 经身份验证的 POST redeem(ticket, app_token)
-  → 返回服务器确认的 user_id
-  → viewer 接入 pool.cdp_url(user_id)，取得人工控制权
-  → 同学自行完成 NetID + Duo
+  → authenticated POST redeem(ticket, app_token)
+  → returns the server-confirmed user_id
+  → the viewer attaches to pool.cdp_url(user_id) and takes human control
+  → the classmate completes NetID + Duo themselves
   → sessions.inspect(user_id)
-  → 向同学展示返回的 canvas_id，确认连接此账号
+  → show the returned canvas_id to the classmate to confirm it is the account to connect
   → sessions.complete_login(user_id, confirmed_canvas_id)
-  → ACTIVE，保存加密快照，结束 viewer 控制权
+  → ACTIVE, encrypted snapshot saved, viewer control ends
 ```
 
-- `tokens.py` 发的是本应用凭证，不是 Canvas token，不替代 NetID/Duo。
-- ticket 原文不保存，仅保留哈希；每人最多一个待兑换票据。应用 token 轮换后，旧票据不可用；票据只能兑换一次，服务重启自然失效。
-- `redeem()` 不是 HTTP 路由，未来网关必须用 POST 并保护 Origin/CSRF；GET 链接预览不能消费票据。
-- 票据兑换只确定用户，不建立持久 viewer 会话。网关还要发短期 viewer session，并对 WebSocket 连接及后续操作持续授权。
-- `SessionManager` 的 `user_id` 方法是内部接口；不得把外部 URL 的用户编号原样传入。应从应用 token 验证结果或已验证 viewer session 派生。
-- 未绑定时 `inspect()` 返回 `UNBOUND` 和可确认的 Canvas ID，不自动建立绑定；存在绑定后不允许静默切换账号。
+- `tokens.py` issues this app's own credential, not a Canvas token, and does not replace NetID/Duo.
+- The ticket text is never stored, only its hash; at most one pending ticket per person. Rotating the app token invalidates old tickets; a ticket can be redeemed once, and a service restart naturally invalidates it.
+- `redeem()` is not an HTTP route; the future gateway must use POST and protect Origin/CSRF. A GET link preview must not be able to consume a ticket.
+- Redeeming a ticket only establishes the user; it does not create a persistent viewer session. The gateway must also issue a short-lived viewer session and keep authorising the WebSocket connection and every later action.
+- `SessionManager`'s `user_id` methods are internal; never pass a user number from an external URL straight in. Derive it from the app-token verification result or a verified viewer session.
+- When unbound, `inspect()` returns `UNBOUND` and a Canvas ID to confirm, without binding automatically; once bound, silently switching accounts is not allowed.
 
-## 5. Cookie 如何保存与恢复
+## 5. How cookies are saved and restored
 
-### 请求与轮换
+### Requests and rotation
 
-`PooledBrowser.run()` 使用既有 `browserthread.run(key=user_id)`，再连接 `pool.cdp_url(user_id)`。要求该独立浏览器恰好有一个 context，避免自动选择不明确的上下文。
+`PooledBrowser.run()` uses the existing `browserthread.run(key=user_id)` and then connects to `pool.cdp_url(user_id)`. The dedicated browser must have exactly
+one context, so there is never an ambiguous automatic context choice.
 
-探针通过该 context 的 `request.get('/api/v1/users/self')` 请求，`max_redirects=0`，10 秒请求超时，45 秒 worker 外层预算。Playwright 的 context request 与浏览器共享 Cookie，响应轮换会回到同一 cookie jar。[官方 API 文档](https://playwright.dev/python/docs/api/class-apirequestcontext)
+The probe issues `request.get('/api/v1/users/self')` through that context, with `max_redirects=0`, a 10-second request timeout and a 45-second outer worker budget.
+Playwright's context request shares cookies with the browser, so rotated cookies in the response go back into the same cookie jar. [Official API docs](https://playwright.dev/python/docs/api/class-apirequestcontext)
 
-返回 200 还必须解析出数字形式的账号 ID；支持仓库使用的 `while(1);` JSON 前缀。不会把登录 HTML 当成功，也不在异常结果里返回响应正文、登录输入或 Cookie。
+A 200 must also parse to a numeric account ID; the `while(1);` JSON prefix the repo uses is supported. A login HTML page is never taken as success, and error results never return the response body, login input or cookies.
 
-### 快照
+### Snapshots
 
-保存位置沿用 registry：
+Storage follows the registry layout:
 
 ```text
 <AINL_HOME>/users/<chat_id>/
-  chrome-profile/       # 现有 BrowserPool 管理
-  app-token.json        # 现有 tokens.py 管理
-  canvas-session.enc    # 本轮新增会话快照
+  chrome-profile/       # managed by the existing BrowserPool
+  app-token.json        # managed by the existing tokens.py
+  canvas-session.enc    # the session snapshot added this round
 ```
 
-加密内容包括 `schema=1`、应用 user_id、Canvas origin、Canvas ID、递增 version 和 Cookie 列表。读取时校验封装身份，所以将 A 的密文复制到 B 目录会被拒绝。
+The encrypted content includes `schema=1`, the app user_id, the Canvas origin, the Canvas ID, an increasing version and the cookie list. The envelope identity
+is checked on read, so copying A's ciphertext into B's directory is rejected.
 
-**当前只保存 domain 与 Canvas host 精确匹配的 Cookie**，保留其 path/expiry/secure 等属性，排除其他域与已过期项。不保存 SSO/Duo Cookie、localStorage、IndexedDB，也不声称这是完整 storage state。相关浏览器状态仍由既有 profile 保留，重启后的实际 Duo 行为需真实验证。
+**Only cookies whose domain exactly matches the Canvas host are saved**, keeping path/expiry/secure and other attributes and excluding other domains and expired entries.
+SSO/Duo cookies, localStorage and IndexedDB are not saved, and this does not claim to be a complete storage state. That browser state is still kept by the existing
+profile; actual Duo behaviour after a restart needs real-world testing.
 
-写盘使用同目录加密临时文件 → flush/fsync → `os.replace`，不产生明文临时文件。损坏、密钥不匹配、身份不符会抛出 `SnapshotError`，不能按“文件不存在”静默建立新身份。
+Writes go encrypted temp file in the same directory → flush/fsync → `os.replace`; no plaintext temp file is ever created. Corruption, a key mismatch or an identity
+mismatch raises `SnapshotError`; it is never silently treated as "no file" and used to create a new identity.
 
-profile 本身仍含凭证；加密快照不能替代服务账号 ACL 和磁盘保护。多进程写锁、密钥轮换、备份策略未实现，首版由单一服务实例独占写入。
+The profile itself still contains credentials; the encrypted snapshot does not replace service-account ACLs and disk protection. Multi-process write locking, key
+rotation and a backup policy are not implemented; the first version has a single service instance writing exclusively.
 
-### 恢复
+### Restore
 
-`sessions.restore(user_id)` 先探测当前浏览器：
+`sessions.restore(user_id)` first probes the current browser:
 
-- 当前已登录正确账号：直接保存当前新状态，不用旧快照覆盖。
-- 当前已登录其他账号：返回 `IDENTITY_MISMATCH`。
-- 确认 401 或重定向：导入当前快照中的 Canvas Cookie，再探测账号；恢复成功才更新快照。
-- 网络异常、403、429、5xx 或无效 JSON：不导入旧 Cookie。
-- 没有快照：返回 `UNBOUND`，等待首次登录。
+- Already logged in to the right account: save the current fresh state, don't overwrite it with the old snapshot.
+- Logged in to a different account: return `IDENTITY_MISMATCH`.
+- Confirmed 401 or redirect: import the Canvas cookies from the current snapshot and probe the account again; the snapshot is updated only if restore succeeds.
+- Network error, 403, 429, 5xx or invalid JSON: old cookies are not imported.
+- No snapshot: return `UNBOUND` and wait for the first login.
 
-快照不能让已被学校撤销的会话复活；恢复后仍需验证。当前将探针 3xx 统一视为需重新认证，不追踪重定向目标；若学校增加非认证重定向，应进一步分类。
+A snapshot cannot revive a session the school has revoked; it still has to be verified after restore. Any 3xx on the probe is currently treated as needing
+re-authentication, without following the redirect target; if the school adds non-authentication redirects, they should be classified further.
 
-## 6. 保活与故障状态
+## 6. Keep-alive and failure states
 
-`heartbeat(user_id)` 只执行一次探针并保存轮换后的 Cookie，尚无自动线程或定时任务。未来由统一调度器调用，可先用约 30 分钟间隔，按实际情况调整；已有业务活动时减少额外请求。
+`heartbeat(user_id)` runs one probe and saves the rotated cookies; there is no automatic thread or schedule yet. A future central scheduler would call it, starting at
+roughly 30-minute intervals and adjusting to real behaviour; when there is business activity anyway, fewer extra requests are needed.
 
-| 状态 | 含义与上层处理 |
+| State | Meaning and what the layer above should do |
 |---|---|
-| `ACTIVE` | 探针成功且身份匹配；快照操作成功后才返回 |
-| `UNBOUND` | 尚无确认绑定；提供登录入口 |
-| `REAUTH_REQUIRED` | 401/3xx；暂停任务，通知本人重新认证 |
-| `IDENTITY_MISMATCH` | 已有账号绑定与当前浏览器不符；拒绝更新 |
-| `BLOCKED` | 403；检查权限，不能盲目触发 Duo |
-| `DEGRADED` | 网络/其他 HTTP/格式错误；退避处理 |
-| `QUARANTINED` | worker 超时；本实例拒绝该用户后续操作 |
+| `ACTIVE` | probe succeeded and identity matches; returned only after the snapshot operation succeeded |
+| `UNBOUND` | no confirmed binding yet; offer the login entry |
+| `REAUTH_REQUIRED` | 401/3xx; pause tasks, tell the person to re-authenticate |
+| `IDENTITY_MISMATCH` | an existing account binding doesn't match the current browser; refuse to update |
+| `BLOCKED` | 403; check permissions, never blindly trigger Duo |
+| `DEGRADED` | network / other HTTP / format error; back off |
+| `QUARANTINED` | worker timeout; this instance refuses further operations for that user |
 
-超时隔离是因为既有 browserthread 超时只放弃等待，旧线程可能仍在运行。本库超时后不会接受迟到快照或继续派发同用户任务。恢复需由宿主确认旧任务已停止、完成受控重启后再重建服务；没有提供盲目清除隔离标记的接口。
+Quarantine on timeout exists because the existing browserthread timeout only stops waiting; the old thread may still be running. After a timeout this library will not
+accept a late snapshot or dispatch more tasks for that user. Recovery requires the host to confirm the old task has stopped and do a controlled restart, then rebuild the
+services; there is deliberately no interface to blindly clear the quarantine flag.
 
-审批撤销检查发生在浏览器访问前及保存前，但不承诺取消已执行中的网络请求。`/forget` 正式接线时必须先停止该用户的队列、viewer 和浏览器，再删除目录；仅删除快照不代表学校端全局注销。
+Approval-revocation checks happen before browser access and before saving, but cancelling network requests already in flight is not promised. When `/forget` is properly
+wired, it must first stop that user's queue, viewer and browser, then delete the directory; deleting only the snapshot is not a global logout on the school side.
 
-## 7. 后续需要改动的现有位置
+## 7. Existing places that need changes later
 
-**下表是接线计划，本轮没有修改这些文件。**
+**The table below is a wiring plan; none of these files were modified this round.**
 
-| 位置 | 需要接入的内容 |
+| Location | What needs to be wired in |
 |---|---|
-| `scale-up/bot.py` | 初始化并复用 registry/pool/services；单 receiver 按用户派发；新用户独立 Conversation/BotState；加入探针调度和去重重登通知 |
-| `scale-up/onboarding.py` | 将已批准后的 coming-soon 提示改为连接入口；`/forget` 先撤销活动会话和任务再删除目录 |
-| `scale-up/browsers.py` | restart/reap/shutdown 与 checkpoint/restore 协调；回收前保存，启动后恢复；验证端口归属和遗留进程。不要在 pool 内锁中回调会再次调用 pool 的 SessionManager，避免死锁 |
-| `src/ainl/bot/conversation.py` | 注入用户专属 Canvas client、WebAssign factory、通道策略；不再让新用户走默认 9222 或全局通道 |
-| `src/ainl/canvas/api.py`、`_http.py` | 可注入共享 BrowserContext 的业务 transport；保持分页、上传、CSRF、错误和回执语义；当前本库仅探针共享 Cookie，尚未迁移业务请求 |
-| `src/ainl/canvas/channel.py`、`keepalive.py` | 为多人入口显式传入用户上下文，或由新入口完全替代其全局行为；保留主账号旧入口兼容 |
-| 根 `pyproject.toml` | 正式接入时纳入新包和依赖、明确测试收集；当前无需改动 |
+| `scale-up/bot.py` | initialise and reuse registry/pool/services; single receiver dispatching per user; separate Conversation/BotState for new users; add probe scheduling and de-duplicated re-login notices |
+| `scale-up/onboarding.py` | replace the post-approval "coming soon" message with a connect entry; `/forget` revokes active sessions and tasks before deleting the directory |
+| `scale-up/browsers.py` | coordinate restart/reap/shutdown with checkpoint/restore; save before reaping, restore after starting; verify port ownership and leftover processes. Don't call back into a SessionManager that calls the pool again while holding the pool's internal lock, to avoid deadlock |
+| `src/ainl/bot/conversation.py` | inject the user's own Canvas client, WebAssign factory and channel policy; new users no longer use the default 9222 or the global channel |
+| `src/ainl/canvas/api.py`, `_http.py` | a business transport that can be injected with a shared BrowserContext, keeping pagination, upload, CSRF, error and receipt semantics; today only this library's probe shares cookies, business requests are not migrated |
+| `src/ainl/canvas/channel.py`, `keepalive.py` | pass user context explicitly for the multi-user entry, or replace their global behaviour entirely with the new entry; keep the owner's old entry compatible |
+| root `pyproject.toml` | include the new package and dependencies and make test collection explicit when wiring in; no change needed now |
 
-`registry.py`、`tokens.py`、按 key 的 browserthread、CDP 缓存以及 WebAssign 的注入接口可直接复用。未来还要核查 `ApiSource.recover_auth()` 的全局 fallback，防止错误切回主账号。
+`registry.py`, `tokens.py`, the keyed browserthread, the CDP cache and WebAssign's injection points can be reused as they are. The global fallback in
+`ApiSource.recover_auth()` must be checked later so it can't wrongly switch back to the owner's account.
 
-## 8. 接下来新增的远程 viewer
+## 8. The remote viewer to add next
 
-新的 viewer 应连接已有池的浏览器，不再次 `launch_persistent_context()` 打开相同 profile。
+The new viewer should attach to the pool's existing browser, not call `launch_persistent_context()` again on the same profile.
 
-沿用原型 CDP screencast + 输入透传技术，但另写受控网关：
+It keeps the prototype's CDP screencast + input passthrough technique, but behind a new controlled gateway:
 
-1. HTTPS/WSS 网关鉴权；CDP 保持内部可访问。
-2. 每个 viewer session 只映射一个已验证用户和浏览器；仅向该用户发送画面。
-3. 人工控制租约期间暂停后台操作；支持实际 SSO/Duo 流程产生的新页面。
-4. 不复制原型 `/status` 中的 `activeElement.value` 读取；禁用登录输入、页面正文、票据和 Cookie 日志。
-5. 原型 `/agent/read`、`/snapshot`、`/shutdown` 不直接开放；变更接口需授权及 CSRF/Origin 校验。
-6. 限制导航/重定向与网络出口，禁止访问宿主内部服务；实际学校登录域先测定再配置。
-7. 登录完成调用本库确认绑定，撤销 viewer 控制权，再恢复业务队列。
+1. HTTPS/WSS gateway authentication; CDP stays internal only.
+2. Each viewer session maps to exactly one verified user and browser; frames are sent only to that user.
+3. Background work pauses during the human-control lease; new pages opened by the real SSO/Duo flow are supported.
+4. Do not copy the prototype's `/status` reading of `activeElement.value`; no logging of login input, page bodies, tickets or cookies.
+5. The prototype's `/agent/read`, `/snapshot`, `/shutdown` are not exposed directly; state-changing interfaces need authorisation and CSRF/Origin checks.
+6. Restrict navigation/redirects and network egress, and block access to the host's internal services; measure the school's actual login domains before configuring.
+7. When login completes, call this library to confirm the binding, revoke viewer control, then resume the task queue.
 
-这一层、完整业务 transport、提交幂等核对及生产撤销编排仍待实现。因此目前可运行的是测试和内部会话接口，还不是同学可直接打开的登录产品。
+This layer, a complete business transport, idempotent submission checks and production revocation orchestration are still to be built. What runs today is the tests
+and the internal session interface, not a login product classmates can open directly.
 
-## 9. 验证方式
+## 9. How to verify
 
-在仓库根目录执行：
+From the repository root:
 
 ```powershell
 python -m pip install -r 'Cookie Management/requirements.txt'
 python -m pytest 'Cookie Management/tests' scale-up/tests tests/test_browserthread_keys.py tests/test_session.py tests/test_auth.py -q
 ```
 
-本次环境默认 pytest 临时路径遇到 Windows 权限问题，改用仓库内独立临时目录完成验证：
+In this environment the default pytest temp path hit a Windows permission problem, so verification used a dedicated temp directory inside the repo:
 
 ```powershell
 python -m pytest 'Cookie Management/tests' scale-up/tests tests/test_browserthread_keys.py tests/test_session.py tests/test_auth.py -q -p no:cacheprovider --basetemp='D:/code/local/projects/AI-native-learning/Cookie Management/.test-tmp-01'
 ```
 
-`--basetemp` 必须指向仅供测试使用的目录，pytest 会清理该目录；不得指向真实用户数据。测试覆盖首次绑定、两用户并发隔离、Cookie 轮换、密文篡改/跨用户复制、写盘失败、认证错误分类、恢复、超时隔离、撤销审批，以及票据跨用户/重放/到期/token 轮换。
+`--basetemp` must point at a directory used only for tests; pytest cleans it, so never point it at real user data. The tests cover first binding, two users isolated
+under concurrency, cookie rotation, ciphertext tampering / cross-user copying, write failure, authentication-error classification, restore, timeout quarantine,
+revoked approval, and tickets across users / replay / expiry / token rotation.
 
-本轮相关测试结果：**67 passed**，包含新增会话测试及既有浏览器池、注册、工作线程与认证测试；`git diff --check` 通过。
+Result for the related tests this round: **67 passed**, including the new session tests and the existing browser-pool, registry, worker-thread and auth tests; `git diff --check` passed.
 
-真实 Canvas/Duo 登录、浏览器重启恢复、持续运行资源占用及作业提交尚未实测。
+Real Canvas/Duo login, restore after a browser restart, resource use over long runs and homework submission have not been tested for real.

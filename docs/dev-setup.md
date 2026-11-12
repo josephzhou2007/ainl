@@ -1,18 +1,20 @@
-# 开发环境与运行
+**English** · [简体中文](dev-setup.zh-CN.md)
 
-最后核对：2026-09-24。现在托管在 Mac mini 上，Windows 笔记本仍可开发。
+# Development setup and running
 
-**macOS（托管机）**——完整说明见 `docs/macos-hosting.md`：
+Last checked: 2026-09-24. Hosted on a Mac mini; a Windows laptop still works for development.
+
+**macOS (the host)** — full guide in `docs/macos-hosting.md`:
 
 ```bash
 cd ~/code/AINATIVELEARNINGOS
 /opt/homebrew/bin/python3.12 -m venv .venv && .venv/bin/python -m pip install -e ".[dev]"
 .venv/bin/python -m playwright install chromium
-.venv/bin/python -m pytest tests canvas-official/tests scale-up/tests "Cookie Management/tests" -q   # 284 passed
-scripts/macos/service.sh install        # 浏览器 + bot 装成 launchd 服务；密钥填 ~/.ainl/env
+.venv/bin/python -m pytest tests canvas-official/tests scale-up/tests "Cookie Management/tests" -q
+scripts/macos/service.sh install        # browser + bot as launchd services; secrets go in ~/.ainl/env
 ```
 
-**Windows**：
+**Windows**:
 
 ```powershell
 cd D:\code\local\projects\AI-native-learning
@@ -20,160 +22,167 @@ python -m pip install -e ".[dev]"
 python -m pytest tests canvas-official/tests -q
 ```
 
-> ⚠️ **不要在 git worktree 或别的副本里再跑 `pip install -e`**。它会把可编辑安装重新指向那个副本，
-> 正在运行的 bot 就会悄悄加载旧代码。踩过一次。
+> ⚠️ **Don't run `pip install -e` again inside a git worktree or another copy.** It repoints the editable
+> install at that copy, and the running bot silently loads old code. Learned the hard way.
 
-## 一、密钥：Windows 放「用户」环境变量，macOS 放 `~/.ainl/env`
+## 1. Secrets: Windows *user* environment variables, macOS `~/.ainl/env`
 
 ```powershell
 setx CANVAS_TOKEN        "<Canvas → Account → Settings → New Access Token>"
-setx TELEGRAM_BOT_TOKEN  "<@BotFather 给的>"
-setx TELEGRAM_CHAT_ID    "<python -m ainl.telegram --discover 打印的>"
+setx TELEGRAM_BOT_TOKEN  "<from @BotFather>"
+setx TELEGRAM_CHAT_ID    "<printed by python -m ainl.telegram --discover>"
 setx GEMINI_API_KEY      "<Google AI Studio>"
 ```
 
-`setx` 只对**新开的**终端生效。macOS 上是 `~/.ainl/env`（chmod 600，`scripts/macos/run.sh` 启动服务前读取）。**密钥永远不进聊天、不进代码、不进日志。**
+`setx` only affects **newly opened** terminals. On macOS it is `~/.ainl/env` (chmod 600, read by `scripts/macos/run.sh`
+before starting a service). **Secrets never go into chats, code or logs.**
 
-## 二、Canvas：两条通道
+## 2. Canvas: two channels
 
-| | token（主） | cookie（备用） |
+| | token (main) | cookie (fallback) |
 |---|---|---|
-| 来源 | 学校批准的 personal access token | 浏览器里登录好的 Canvas 会话 |
-| 需要人在场 | 否 | 首次要 NetID + Duo |
-| 失效 | 被撤销为止 | 靠活动续命；后台每 30 分钟保活一次 |
-| 能力 | REST + GraphQL 均可（`canvas-official/PROBE.md` 实测 11/13） | 相同 |
+| Source | a school-approved personal access token | a logged-in Canvas session in the browser |
+| Needs a human | no | NetID + Duo the first time |
+| Expires | when revoked | kept alive by activity; a background keep-alive every 30 minutes |
+| Capability | REST + GraphQL (`canvas-official/PROBE.md`: 11/13 measured) | the same |
 
-`ApiSource.from_env()` 默认 token 优先，失败时降级 cookie，并在 Telegram 里**明说**降级了。
-`/channel auto|token|cookie` 可手动钉住；钉 `token` 表示"我想知道 token 还能不能用"，不会降级。
+`ApiSource.from_env()` prefers the token and falls back to the cookie on failure, and **says so** in Telegram.
+`/channel auto|token|cookie` pins a channel by hand; pinning `token` means "I want to know whether the token
+still works", so it never falls back.
 
-cookie 通道读的是**开着的那个浏览器里的活 cookie**，不是磁盘快照（快照只和上次保存一样新——
-踩过一次 46 小时前的快照导致 401）。两边都没有会话时，bot 会把 Canvas 登录页打开等你登。
+The cookie channel reads **the live cookies in the running browser**, not a disk snapshot (a snapshot is only as
+fresh as the last save — a 46-hour-old snapshot once caused a 401). If neither channel has a session, the bot opens
+the Canvas login page and waits for you.
 
 ```bash
 python -m ainl.canvas --whoami
 python -m ainl.canvas --planner --days 14
-python -m canvasofficial --probe          # 这个 token 到底能调哪些端点（在 canvas-official/ 下）
+python -m canvasofficial --probe          # which endpoints this token can actually call (run in canvas-official/)
 ```
 
-## 三、浏览器：无窗口、独立进程
+## 3. The browser: headless, its own process
 
-WebAssign 没有 API，要靠一个真浏览器。**它不是任何脚本的子进程**，用调试端口 9222 挂着，
-工具连上去、干完活、断开。
+WebAssign has no API, so it needs a real browser. **It is not a child process of any script**: it sits on debug
+port 9222, tools connect, do their work and disconnect.
 
 ```bash
-python scripts/browser_start.py             # 已在跑就什么都不做
-python scripts/browser_start.py --restart   # 换一个干净的渲染器
-python scripts/browser_start.py --show      # 需要人手动登录时才开窗口
+python scripts/browser_start.py             # does nothing if already running
+python scripts/browser_start.py --restart   # a fresh renderer
+python scripts/browser_start.py --show      # open a window only when a human must log in
 ```
 
-默认 **headless，屏幕上没有任何窗口**。几条用事故换来的事实：
+Headless by default, **no window on screen**. Facts paid for with incidents:
 
-- **必须 `--disable-gpu`**。否则截图不返回、`document.fonts.ready` 永不 resolve、CDP 断连。
-- **窗口最小化 = 打开作业 100% 卡死**（实测 3/3，46 秒）。最小化的窗口不绘制。无窗口模式根除了这个问题。
-- **Cengage / WebAssign 的会话 cookie 是会话级的**（`JSESSIONID`、`cmp-session-id`），浏览器一关就没。
-  所以**每次重启都会登出 WebAssign**——但不需要密码：代码会用 Canvas 的 LTI 启动自动重建会话（约 10 秒）。
-  这一点 `research/hosted-browser-poc/REPORT-2026-09-15.md` 早就记过；后来忘了又踩了一遍。
-- **一个进程里 `sync_playwright()` 只能可靠启动一次**，所以驱动是每线程单例（`util/pw.py`），CDP 连接缓存复用、**不要 close**。
-- 同一个学生**不要同时开两个浏览器上下文**登 Cengage，会互相踢下线。
-- **别在这个无窗口浏览器里开第二个标签页。** `ctx.new_page()` 之后的导航经常永远不提交（2026-09-21 一天三次，
-  还会连带卡住驱动连接）。借用现有的那一个标签页，用完导回 WebAssign 列表——`external/gradescope.py` 就是这么做的。
+- **`--disable-gpu` is required.** Without it screenshots never return, `document.fonts.ready` never resolves and CDP disconnects.
+- **A minimised window = opening an assignment hangs 100% of the time** (3/3, 46 seconds). Minimised windows don't paint. Headless removes the problem.
+- **Cengage / WebAssign session cookies are session-scoped** (`JSESSIONID`, `cmp-session-id`) and vanish when the browser closes.
+  So **every restart logs you out of WebAssign** — but no password is needed: the code rebuilds the session through Canvas's
+  LTI launch (about 10 seconds). `research/hosted-browser-poc/REPORT-2026-09-15.md` had already recorded this; it was forgotten and hit again.
+- **`sync_playwright()` can only reliably start once per process**, so the driver is a per-thread singleton (`util/pw.py`);
+  the CDP connection is cached and reused — **do not close it**.
+- **Don't open two browser contexts logged in to Cengage for the same student**; they kick each other out.
+- **Don't open a second tab in this headless browser.** Navigations after `ctx.new_page()` often never commit (three times on
+  2026-09-21, also hanging the driver connection). Borrow the existing tab and navigate it back to the WebAssign list afterwards —
+  `external/gradescope.py` does exactly that.
 
-## 四、Telegram
+## 4. Telegram
 
-1. **@BotFather** → `/newbot` → 拿 token → 打开 bot 按 **Start**
-2. `python -m ainl.telegram --discover` 打印 `TELEGRAM_CHAT_ID`
-3. `python -m ainl.telegram --ping` 收到 ✅ 就通了
+1. **@BotFather** → `/newbot` → get the token → open the bot and press **Start**
+2. `python -m ainl.telegram --discover` prints `TELEGRAM_CHAT_ID`
+3. `python -m ainl.telegram --ping` — a ✅ means it works
 
-一个 bot token **只能有一个** `getUpdates` 消费者；起第二个实例两边都会 409。
+A bot token can have **only one** `getUpdates` consumer; a second instance gets 409 on both sides.
 
-**对话记录（transcript）**：日志只说"发了一条"，不说发了什么。bot 会把学生和 bot 之间的**每一条**消息——
-收到的文字 / 照片 / 文件 / 按钮点击，发出的文字 / 图片 / 相册 / 按钮改动——按一行一个 JSON 追加到
-`~/.ainl/transcript.jsonl`（`AINL_HOME` 下）；经手的所有图片（学生拍的答案纸、题图、填好后的截图）
-存到 `~/.ainl/photos/`，记录里用相对路径指向它。事后排错就靠它。
+**Transcript**: the logs only say "sent a message", not what. The bot appends **every** message between student and
+bot — incoming text / photos / files / button taps, outgoing text / images / albums / button edits — one JSON per line to
+`~/.ainl/transcript.jsonl` (under `AINL_HOME`); every image it handles (the student's answer sheets, question pictures,
+filled-in screenshots) goes to `~/.ainl/photos/`, referenced by relative path. This is what debugging relies on.
 
 ```bash
-python -m ainl.telegram --transcript          # 最近 40 条：时间 ←/→ 类型 文字(前 300 字) [图片路径] {按钮}
+python -m ainl.telegram --transcript          # last 40: time ←/→ type text (first 300 chars) [image path] {buttons}
 python -m ainl.telegram --transcript 200
-python -m ainl.telegram --transcript-since 2026-09-24T23:00     # 本地时间起
-AINL_TRANSCRIPT=0 python -m ainl.bot          # 关掉（测试里默认就是关的）
+python -m ainl.telegram --transcript-since 2026-09-24T23:00     # from a local time
+AINL_TRANSCRIPT=0 python -m ainl.bot          # turn it off (off by default in tests)
 ```
 
-写入失败只记一次 warning、绝不影响 bot；记录里**没有任何 token**。
-> ⚠️ transcript 和 photos/ 里是学生的作业内容和答案照片，**不要分享、不要进 git、不要贴进聊天**。
+A write failure logs one warning and never affects the bot; the transcript **contains no tokens**.
+> ⚠️ The transcript and `photos/` contain the student's homework and answer photos. **Don't share them, don't commit them, don't paste them into chats.**
 
-## 五、对话 bot
+## 5. The conversation bot
 
 ```bash
-python -m ainl.bot          # 常驻（重启：Windows scripts/bot_restart.ps1，macOS scripts/macos/service.sh restart bot；都不碰浏览器），长轮询；只服务 TELEGRAM_CHAT_ID 这一个人
+python -m ainl.bot          # long-running (restart: Windows scripts/bot_restart.ps1, macOS scripts/macos/service.sh restart bot; neither touches the browser), long polling; serves only TELEGRAM_CHAT_ID
 ```
 
-**入口只有一个：`/todo`。** 其它一切都从它给的编号开始。
+**There is one entry point: `/todo`.** Everything else starts from the codes it gives you.
 
 ```
-/todo            今天 → +4 天，每门课一块（A、B、C…）
-/todo 14         往后看 14 天（列表下面也有按钮）
-回复 B6          打开那一项：
-   ✍️ 📎 💬      Canvas 原生作业 —— 发文字 / 文件 / 链接，确认后由官方 API 提交
-   🧮            WebAssign —— 发来每道题的截图；选择题点按钮，其余写在一张纸上拍一张照
-   ↗             暂时做不了的平台 —— 给链接
-/cancel          放弃当前项（连同持有的图片一起释放）
-/restart         清掉所有半路状态（bot 没反应时用）
-/timing          最近各步骤耗时
-/channel         Canvas 走 token 还是 cookie
+/todo            today → +4 days, one block per course (A, B, C…)
+/todo 14         look 14 days ahead (also a button under the list)
+reply B6         open that item:
+   ✍️ 📎 💬      Canvas-native assignment — send text / a file / a link; handed in through the official API after you confirm
+   🧮            WebAssign — the bot sends a picture of each question; tap buttons for choices, write the rest on one sheet and send one photo
+   ↗             a platform it can't handle yet — you get the link
+/cancel          drop the current item (and release the images it holds)
+/restart         clear all half-finished state (use when the bot stops responding)
+/timing          recent per-step timings
+/channel         is Canvas using the token or the cookie
 ```
 
-WebAssign 一轮：题图 → 你拍答案纸 → **Gemini 读一次**（整个系统唯一的 LLM 调用）→ 逐题预览
-→ `Fill` 填入 → 看渲染后的截图 → `Submit / Modify / Cancel`。
-**没有你点确认，绝不提交。** Modify 优先打字改正（0 次模型调用）。
+A WebAssign round: question pictures → you photograph your answer sheet → **Gemini reads it once** (the only LLM call in the
+whole system) → per-question preview → `Fill` → look at the rendered screenshot → `Submit / Modify / Cancel`.
+**Nothing is submitted until you confirm.** Modify prefers typed corrections (0 model calls).
 
-状态存 `~/.ainl/bot_state.json`。图片只在内存里，结束一轮就释放。
+State lives in `~/.ainl/bot_state.json`. Images are kept only in memory and released when the round ends.
 
-## 五·五、`/auto` 与 `/sweep`（公开版不含）
+## 5.5 `/auto` and `/sweep` (not in the public build)
 
-私有仓库里有一个只在开发时打开的开关：让语言模型代替学生作答，用来把填写、提交、批改这条链路完整跑通。
-公开版**没有包含这个求解器**，`/auto` 和 `/sweep` 只会回复“不可用”。产品本身从不生成答案：交上去的永远是学生自己写的内容。
+The private repository had a developer-only switch that let a language model answer in the student's place, to exercise the
+fill / submit / grade path end to end. The public build **does not include that solver**; `/auto` and `/sweep` only reply that
+they are unavailable. The product itself never produces answers: what gets handed in is always the student's own work.
 
-## 五·六、提交之后
+## 5.6 After submitting
 
-提交后 bot 逐题报 ✓ / ✗。有 ✗ 时这一轮不结束（stage `graded`）：打字 `2: …`，或再拍一张（整页改过的，或只拍改过的题），
-只有和已提交答案**不同**的题会被重新填入、重新提交；分步题（Master It）排在最后，其他题提交后才逐步问。`/cancel` 退出。
+After a submit the bot reports ✓ / ✗ per question. With any ✗ the round doesn't end (stage `graded`): type `2: …`, or send another
+photo (the whole corrected page, or just the corrected questions); only questions that **differ** from the submitted answers are
+refilled and resubmitted. Step-by-step questions (Master It) come last, asked one step at a time after the others are submitted. `/cancel` exits.
 
-## 六、早报
+## 6. Morning brief
 
 ```bash
-python -m ainl.brief --preview | --now | --serve     # --serve 每天 08:00（Canvas 时区）
+python -m ainl.brief --preview | --now | --serve     # --serve: every day at 08:00 (Canvas time zone)
 ```
 
-## 七、耗时与排错
+## 7. Timing and troubleshooting
 
-- 每个浏览器操作有预算，超时由看门狗（`util/browserthread.py`）放弃并重试，必要时自动重启浏览器。
-- 逐步耗时：设 `AINL_TRACE_DETAIL=1`，跑 `python scripts/timing_trace.py`，再 `python scripts/timing_report.py`。
-- 现状与待办：`docs/optimization-goals.md`；测量结论：`docs/timing-analysis.md`。
-- 跑完带 Playwright 的脚本常在**结尾**看到一段 Node `EPIPE` 堆栈——那是被放弃的驱动的退出噪音，
-  不是失败。**看输出的开头。**
+- Every browser operation has a budget; on timeout the watchdog (`util/browserthread.py`) gives up and retries, restarting the browser if needed.
+- Per-step timings: set `AINL_TRACE_DETAIL=1`, run `python scripts/timing_trace.py`, then `python scripts/timing_report.py`.
+- Status and to-dos: `docs/optimization-goals.md`; measurements: `docs/timing-analysis.md` (both Chinese).
+- Scripts that use Playwright often print a Node `EPIPE` stack trace **at the end** — exit noise from an abandoned driver,
+  not a failure. **Read the start of the output.**
 
-## 代码结构
+## Code layout
 
 ```
 src/ainl/
-  config.py                 环境变量；秘密永不 repr
+  config.py                 environment variables; secrets never repr'd
   canvas/
-    api.py                  ApiSource：REST + GraphQL、提交、sessionless_launch
-    channel.py              token / cookie 选择与钉住
-    session.py              BrowserSession；从活浏览器读 cookie；拉起登录页
-    keepalive.py            后台保活 Canvas 会话
+    api.py                  ApiSource: REST + GraphQL, submissions, sessionless_launch
+    channel.py              token / cookie choice and pinning
+    session.py              BrowserSession; reads cookies from the live browser; opens the login page
+    keepalive.py            background Canvas session keep-alive
     _http.py auth.py models.py source.py
   external/
-    webassign.py            列作业 / 题图 / 题型分类 / fill / choose / submit / LTI 自愈
-    link.py                 Canvas 作业 ↔ WebAssign 作业（LTI 为准，标题为退路）
-    routing.py              这份作业到底交到哪（Canvas / Gradescope / 两边）
-    platforms.py            外部平台登记表
-  mathinput/                手写 → LaTeX → WebAssign 方言 MathML；可插拔视觉模型
-  bot/                      conversation.py（对话）、state.py（持久状态）
+    webassign.py            list assignments / question pictures / question types / fill / choose / submit / LTI self-heal
+    link.py                 Canvas assignment ↔ WebAssign assignment (LTI first, title as fallback)
+    routing.py              where this assignment actually goes (Canvas / Gradescope / both)
+    platforms.py            registry of external platforms
+  mathinput/                handwriting → LaTeX → WebAssign-dialect MathML; pluggable vision models
+  bot/                      conversation.py (dialogue), state.py (persistent state)
   telegram/client.py        send / send_photo / send_media_group / set_commands
-  brief/                    早报
-  util/                     timing（分类 span）、browserthread（看门狗）、pw（驱动单例）
-canvas-official/            只用官方文档化 REST 的独立 token 客户端 + 能力探针
-scripts/                    browser_start、timing_*、wa_survey（题型普查）等
-tests/                      全部离线，MockTransport / Fake*
+  brief/                    morning brief
+  util/                     timing (categorised spans), browserthread (watchdog), pw (driver singleton)
+canvas-official/            standalone token client using only documented REST + a capability probe
+scripts/                    browser_start, timing_*, wa_survey (question-type census), etc.
+tests/                      all offline, MockTransport / Fake*
 ```

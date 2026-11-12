@@ -1,112 +1,115 @@
-# 入驻设计 — 60 秒目标
+**English** · [简体中文](ONBOARDING.zh-CN.md)
 
-## 原则
+# Onboarding design — the 60-second goal
 
-> 开发者能脚本化的事情，一件都不留给用户。
+## Principle
 
-任何要求用户「打开设置」「复制粘贴」「创建什么」的步骤，都算设计失败。
-衡量标准：**输入框数量 = 0，点击次数 ≤ 4**。
+> Anything the developer can script is never left to the user.
+
+Every step that asks the user to "open settings", "copy and paste" or "create something" counts as a design failure.
+The measure: **number of input fields = 0, number of taps ≤ 4**.
 
 ---
 
-## 两阶段
+## Two phases
 
-> **现状（2026-09-20）：** Phase 1 已经是线上路径——学校批准了个人 access token，它是主通道。
-> 浏览器 cookie 会话是备用。WebAssign 这类供应商平台**不需要学生另外提供任何密码**：
-> 会话由 Canvas 的 LTI sessionless launch 建立，所以上手流程里只有"给一个 Canvas token"这一步。
-> Phase 2（OAuth2 developer key）和多用户仍未做；多用户的三个约束见 `docs/optimization-goals.md`。
+> **Status (2026-09-20):** Phase 1 is already the live path — the school approved personal access tokens, and
+> the token is the main channel. The browser cookie session is the fallback. Vendor platforms like WebAssign
+> **need no extra password from the student**: the session is created by Canvas's LTI sessionless launch, so the
+> only onboarding step is "give us a Canvas token". Phase 2 (OAuth2 developer key) and multi-user are not done;
+> the three constraints for multi-user are in `docs/optimization-goals.md` (Chinese).
 
-### Phase 1 — Pilot（无需学校批准，~90 秒）
+### Phase 1 — Pilot (no school approval needed, ~90 seconds)
 
-用 Canvas **个人 access token**。
+Uses a Canvas **personal access token**.
 
 ```
 1. /start                                        3s
-2. bot: 「点这个链接 → 页面底部 New Access Token
-         → 生成后把那串字发给我」+ 一张标注好的截图
-3. 学生生成并粘贴                                60s
-4. bot 验证 → 「找到 4 门课 ✓」                   5s
+2. bot: "Tap this link → New Access Token at the bottom
+         → send me the string it gives you" + an annotated screenshot
+3. student generates and pastes it               60s
+4. bot verifies → "Found 4 courses ✓"            5s
 ```
 
-- 缺点：有一次复制粘贴，且需要看懂 Canvas 设置页
-- 优点：**今天就能跑**，不需要任何人批准
-- 适用：种子用户 10~50 人，用来攒真实使用数据和口碑
+- Downside: one copy-paste, and the student has to make sense of the Canvas settings page
+- Upside: **runs today**, nobody has to approve anything
+- For: 10–50 seed users, to collect real usage data and word of mouth
 
-**降低这一步摩擦的技巧**：bot 直接发一张画了红圈的截图，而不是文字描述。
-实测这能把"看不懂在哪点"的流失率砍掉一大半。
+**Trick to reduce friction at this step**: the bot sends a screenshot with a red circle instead of a text description.
+In practice this cuts the "couldn't find where to click" drop-off by more than half.
 
-### Phase 2 — 学校签发 developer key（~30 秒，零输入）
+### Phase 2 — a school-issued developer key (~30 seconds, zero input)
 
-向 UW Canvas 管理员申请 **OAuth2 developer key**，拿到 `client_id` / `client_secret`。
+Ask the UW Canvas admins for an **OAuth2 developer key** and get a `client_id` / `client_secret`.
 
 ```
-1. 点 t.me/UWLearnBot                             3s
-2. bot 发按钮「连接 Canvas」
-3. 点 → canvas.wisc.edu/login/oauth2/auth?...
-   学生已登录 → 只有一个 Authorize 按钮           15s
-4. 回调 → 跳回 Telegram「找到 4 门课 ✓」           5s
+1. tap t.me/<YourBot>                            3s
+2. bot sends a "Connect Canvas" button
+3. tap → canvas.<school>.edu/login/oauth2/auth?...
+   student already logged in → just one Authorize button   15s
+4. callback → back in Telegram: "Found 4 courses ✓"         5s
 ```
 
-OAuth 回调里用 Telegram 的 `state` 参数携带 `telegram_user_id`，
-这样授权完能自动认回是谁，不需要用户做任何关联动作。
+The OAuth callback carries the `telegram_user_id` in Telegram's `state` parameter, so after authorization the
+bot knows who it was without the user linking anything.
 
-**申请 developer key 本身就是学校认可的第一道门槛** ——
-拿到了，说明 IT 至少不反对；拿不到，说明还需要先做教授/学生会背书。
-所以入驻摩擦的大小 = 项目的政治进度条。
+**Getting a developer key is itself the first gate of school acceptance** — if you get one, IT at least doesn't
+object; if you don't, you need professors or student government to vouch first. So onboarding friction is the
+project's political progress bar.
 
 ---
 
-## 默认形态：私聊，不是群
+## Default shape: private chat, not a group
 
-v0.2 设计了「超级群 + 每科一个话题」，但那要求用户：
-建群 → 加 bot → 提升为管理员 → 转超级群 → 开启 Topics → 建 5 个话题。
+v0.2 designed "supergroup + one topic per course", but that requires the user to:
+create a group → add the bot → make it admin → convert to supergroup → turn on Topics → create 5 topics.
 
-**6 步，且 bot 无法代劳（Bot API 不允许 bot 创建群）。** 与 60 秒目标直接冲突。
+**6 steps, and the bot can't do them for you (the Bot API doesn't let bots create groups).** That directly conflicts with the 60-second goal.
 
-### 定稿
+### Final decision
 
-| 形态 | 设置成本 | 给谁 |
+| Shape | Setup cost | For |
 |---|---|---|
-| **私聊（默认）** | 0 步 | 所有人 |
-| 群 + 话题（可选） | 多步引导 | 主动要求的高级用户 |
+| **Private chat (default)** | 0 steps | everyone |
+| Group + topics (optional) | guided, several steps | power users who ask for it |
 
-私聊里怎么实现「每科独立上下文」（本来靠话题解决）：
+How a private chat gets "a separate context per course" (which topics used to provide):
 
-1. **自动路由** —— 大多数消息能从内容判断学科（提到 "Gramática" → SPANISH101）
-2. **粘性焦点** —— 底部常驻一行 inline 按钮 `[MATH222] [PHY247] [SPA101] [ESL116]`，
-   点一次切换当前科目，之后一直对它说话，不用重复点
-3. **回复即定向** —— 回复某条作业消息，自动进入那门课的上下文
+1. **Automatic routing** — most messages reveal the subject from their content (mentions "Gramática" → SPANISH101)
+2. **Sticky focus** — a persistent row of inline buttons `[MATH222] [PHY247] [SPA101] [ESL116]`;
+   tap once to switch the current course, then keep talking to it without tapping again
+3. **Reply sets the target** — replying to an assignment message enters that course's context
 
-这三条叠加，实际体验和话题几乎一样，而设置成本是 0。
+Together these feel almost the same as topics, at zero setup cost.
 
-> 待验证：Telegram 开启 Topics 的最低门槛（历史上要求 200 成员，后放宽，需实测确认）。
-> 即便无门槛，6 步设置也仍然超预算，私聊优先的结论不变。
+> To verify: Telegram's minimum requirement for enabling Topics (historically 200 members, later relaxed; needs testing).
+> Even with no requirement, 6 setup steps are over budget, so private-chat-first stands.
 
 ---
 
-## 这带来的架构变化（v0.2 → v0.3）
+## What this changes in the architecture (v0.2 → v0.3)
 
-从单租户变成多租户，三件事必须跟着改：
+From single-tenant to multi-tenant; three things have to change with it:
 
-| | v0.2（自用） | v0.3（服务） |
+| | v0.2 (personal use) | v0.3 (a service) |
 |---|---|---|
-| 实例 | 每人一个 Mac mini | **一个后端，N 个用户** |
-| 数据库 | 一人一个 SQLite | 所有表加 `user_id`，行级隔离 |
-| bot | 每人自建 | **一个共享 bot** |
-| 凭证 | 自己的 token 存本机 | **持有他人凭证 → 必须加密存储 + 可撤销 + 隐私声明** |
+| Instance | one Mac mini per person | **one backend, N users** |
+| Database | one SQLite per person | every table gets `user_id`, row-level isolation |
+| Bot | everyone builds their own | **one shared bot** |
+| Credentials | your own token on your own machine | **holding other people's credentials → must be encrypted + revocable + have a privacy notice** |
 
-⚠️ **「数据从不离开你自己的设备」这个论据失效了。** 现在你在替别人保管 Canvas 凭证，
-这是真实的安全义务，不是形式主义：
+⚠️ **The "your data never leaves your own device" argument no longer holds.** You are now keeping other people's
+Canvas credentials. That is a real security obligation, not a formality:
 
-- token 用独立密钥加密存储（不是明文，不是环境变量）
-- 提供 `/disconnect` 一键撤销并删除
-- 写一页隐私说明：存什么、不存什么、怎么删
-- 出口日志可审计
+- tokens encrypted with a separate key (not plaintext, not environment variables)
+- a `/disconnect` that revokes and deletes in one step
+- a one-page privacy notice: what is stored, what isn't, how to delete it
+- auditable outbound logs
 
-### 托管
+### Hosting
 
-Pilot 阶段 Mac mini 完全够（50 人级别）。但需要一个公网 HTTPS 端点，
-用于 Telegram webhook 和 OAuth 回调。
+For the pilot (around 50 users) a Mac mini is plenty. It does need a public HTTPS endpoint for the Telegram
+webhook and the OAuth callback.
 
-**Cloudflare Tunnel** —— 免费，不用端口转发，不用公网 IP，不用买域名。
-一条命令把 Mac mini 上的本地端口暴露成 HTTPS。这是这个规模下的正解。
+**Cloudflare Tunnel** — free, no port forwarding, no public IP, no domain to buy. One command exposes a
+local port on the Mac mini as HTTPS. At this scale it is the right answer.

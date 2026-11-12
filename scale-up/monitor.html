@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monitor · Native Bot Learning</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --fg: var(--tg-theme-text-color, #111111);
+    --muted: var(--tg-theme-hint-color, #6b6b6b);
+    --card: var(--tg-theme-secondary-bg-color, #f1f1f4);
+    --ok: #2e9d57; --warn: #e08a00; --crit: #d93a3a; --track: rgba(127,127,127,.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tg]) { --bg: #17181c; --fg: #ececec; --muted: #9a9aa2; --card: #22242a; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.35 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 12px 12px 32px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+    margin: 18px 2px 6px; font-weight: 600; }
+  .card { background: var(--card); border-radius: 12px; padding: 12px; }
+  .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track);
+    overflow: hidden; margin: 8px 0 6px; }
+  .bar > i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; transition: width .4s; }
+  .bar > b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--fg); opacity: .35; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .critical { color: var(--crit); }
+  .bg-ok { background: var(--ok); } .bg-warn { background: var(--warn); } .bg-critical { background: var(--crit); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+  .tile { background: var(--card); border-radius: 10px; padding: 8px 10px; }
+  .tile .n { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .l { font-size: 12px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td, th { padding: 6px 4px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--track); }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.r, th.r { text-align: right; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .parts { font-size: 12px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; margin-right: 6px;
+    background: var(--track); vertical-align: 1px; }
+  #status { font-size: 12px; color: var(--muted); text-align: right; margin: 0 2px 4px; }
+  #err { display: none; margin-top: 30vh; text-align: center; padding: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="status">connecting…</div>
+  <div id="err"></div>
+  <div id="app" hidden>
+    <div class="card">
+      <div class="row"><span class="big" id="pct">–</span><span class="muted" id="memline"></span></div>
+      <div class="bar"><i id="fill"></i><b id="m80"></b><b id="m90"></b></div>
+      <div class="row small muted"><span id="swap"></span><span id="cpu"></span></div>
+      <div class="small" style="margin-top:6px" id="room"></div>
+    </div>
+
+    <h2>Now</h2>
+    <div class="tiles" id="tiles"></div>
+
+    <h2>People</h2>
+    <div class="card" style="padding:4px 8px"><table id="people"></table></div>
+
+    <h2>Processes</h2>
+    <div class="card" style="padding:4px 8px"><table id="procs"></table></div>
+
+    <h2>Counts</h2>
+    <div class="card" style="padding:4px 8px"><table id="counts"></table></div>
+  </div>
+</main>
+<script>
+(() => {
+  "use strict";
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { document.documentElement.dataset.tg = "1"; tg.ready(); tg.expand(); }
+  const initData = (tg && tg.initData) || "";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+    (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+  const gb = (mb) => mb == null ? "–" : mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : Math.round(mb) + " MB";
+  const ago = (t, now) => {
+    if (!t) return "–";
+    const s = Math.max(0, now - t);
+    return s < 60 ? Math.round(s) + "s" : s < 3600 ? Math.round(s / 60) + "m" :
+      s < 86400 ? (s / 3600).toFixed(1) + "h" : Math.round(s / 86400) + "d";
+  };
+  const dur = (s) => s == null ? "–" : s < 3600 ? Math.round(s / 60) + "m" :
+    s < 86400 ? (s / 3600).toFixed(1) + "h" : (s / 86400).toFixed(1) + "d";
+
+  function fail(text) {
+    $("app").hidden = true;
+    $("status").textContent = "";
+    $("err").style.display = "block";
+    $("err").textContent = text;
+  }
+
+  function render(d) {
+    const s = d.system, t = d.totals, now = d.at;
+    $("app").hidden = false;
+    $("err").style.display = "none";
+    $("pct").textContent = Math.round(s.pct) + "% used";
+    $("pct").className = "big " + s.level;
+    $("memline").textContent = gb(s.used_mb) + " / " + gb(s.total_mb);
+    $("fill").style.width = Math.min(100, s.pct) + "%";
+    $("fill").className = "bg-" + s.level;
+    $("m80").style.left = s.warn_pct + "%";
+    $("m90").style.left = s.critical_pct + "%";
+    $("swap").textContent = "swap " + gb(s.swap_used_mb) + " · free " + gb(s.available_mb);
+    $("cpu").textContent = "CPU " + Math.round(s.cpu || 0) + "% · load " + (s.load || []).join(" ");
+    $("room").innerHTML = "Room for <b>~" + s.room_browsers + "</b> more browsers before " +
+      s.warn_pct + "% (≈" + s.per_browser_mb + " MB each)";
+
+    const tiles = [
+      [t.active_15m, "active (15 min)"], [t.browsers, "browsers"], [t.viewers, "logging in"],
+      [t.connected, "connected"], [t.approved + "/" + t.registered, "approved"],
+      [t.queued, "queued msgs"]];
+    if (t.orphans) tiles.push([t.orphans, "orphan browsers"]);
+    $("tiles").innerHTML = tiles.map(([n, l]) =>
+      '<div class="tile"><div class="n">' + esc(n) + '</div><div class="l">' + esc(l) + "</div></div>").join("");
+
+    $("people").innerHTML = "<tr><th>Who</th><th class=r>Browser</th><th class=r>Last</th><th class=r>Today</th></tr>" +
+      (d.people.length ? d.people.map((p) => {
+        const color = p.active ? "var(--ok)" : p.connected ? "var(--muted)" : "var(--track)";
+        const flags = [p.school, !p.approved ? "pending" : !p.connected ? "not connected" : "",
+          p.viewer_open ? "🔐 logging in" : "", p.assistant ? "assistant" : "",
+          p.queue ? "⏳ " + p.queue + " queued" : ""].filter(Boolean).join(" · ");
+        const b = !p.browser ? '<span class="muted">–</span>' : gb(p.browser.mb) + '<div class="parts">' +
+          (p.browser.held ? ":" + esc(p.browser.port) + " · idle " + dur(p.browser.idle_s)
+                          : '<span class="warn">not in pool</span>') + "</div>";
+        const x = p.today;
+        return "<tr><td><span class=dot style=\"background:" + color + "\"></span>" + esc(p.name) +
+          '<div class="parts">' + esc(flags) + "</div></td><td class=r>" + b + "</td><td class=r>" +
+          ago(p.last_active, now) + "</td><td class=r>" + x.messages + " msg<div class=parts>" +
+          x.submissions + " sub · " + x.canvas + " api" + (x.errors ? " · <span class=critical>" + x.errors + " err</span>" : "") +
+          "</div></td></tr>";
+      }).join("") : "<tr><td colspan=4 class=muted>nobody yet</td></tr>");
+
+    const o = d.other;
+    $("procs").innerHTML = "<tr><th>What</th><th class=r>MB</th><th class=r>CPU</th><th class=r>Up</th></tr>" +
+      d.groups.map((g) => "<tr><td>" + esc(g.label) + '<div class="parts">' + g.procs + " proc · " +
+        g.parts.slice(0, 5).map((p) => esc(p.part) + (p.n > 1 ? "×" + p.n : "") + " " + gb(p.mb)).join(", ") +
+        "</div></td><td class=r>" + gb(g.mb) + (g.rss_mb !== g.mb ? '<div class="parts">rss ' + gb(g.rss_mb) + "</div>" : "") +
+        "</td><td class=r>" + Math.round(g.cpu) + "%</td><td class=r>" + dur(g.uptime_s) + "</td></tr>").join("") +
+      "<tr><td>Everything else<div class=parts>" + o.procs + " proc · " +
+      o.top.map((x) => esc(x.name) + " " + gb(x.mb)).join(", ") + "</div></td><td class=r>" + gb(o.fp_mb) +
+      "</td><td></td><td></td></tr>";
+
+    const h = t.hour, dd = t.today;
+    const rows = [["Telegram updates", h.updates, dd.updates], ["  of them public bot", h.updates_public, dd.updates_public],
+      ["Canvas API requests", h.canvas, dd.canvas], ["Submissions", h.submissions, dd.submissions],
+      ["Errors", h.errors, dd.errors]];
+    $("counts").innerHTML = "<tr><th></th><th class=r>Last hour</th><th class=r>Today</th></tr>" +
+      rows.map(([l, a, b]) => "<tr><td>" + esc(l) + "</td><td class=r>" + a + "</td><td class=r>" + b + "</td></tr>").join("");
+    $("status").textContent = "updated " + new Date(now * 1000).toLocaleTimeString();
+  }
+
+  // Every 3 s while the page is on screen; a hidden page (app in the
+  // background) stops asking, after the first answer, and resumes when shown.
+  let timer = null, stopped = false, shown = false;
+  async function poll() {
+    timer = null;
+    if (stopped) return;
+    if (document.hidden && shown) { timer = setTimeout(poll, 3000); return; }
+    try {
+      const r = await fetch("monitor.json", {headers: {"X-Telegram-Init-Data": initData},
+                                             cache: "no-store", credentials: "omit"});
+      if (r.status === 403) {
+        stopped = true;
+        return fail(initData ? "Not allowed, or this page has been open too long. Send /monitor in the bot again."
+                             : "Open this from the bot's 📊 Monitor button.");
+      }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      render(await r.json());
+      shown = true;
+    } catch (e) {
+      $("status").textContent = "offline — retrying (" + (e && e.message || e) + ")";
+    }
+    timer = setTimeout(poll, 3000);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !timer && !stopped) poll(); });
+  poll();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+__pycache__/
+.venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# credentials & session state — never commit
+.env
+*.storage_state.json
+.ainl/
+analysis/data/*.json
+flow-events-*.json
+
+# raw handwriting samples (personal; eval set lives elsewhere)
+photosamples/
+scale-up/__pycache__/
+scale-up/tests/__pycache__/
+
+# this machine's Claude Code permissions — not shared
+.claude/settings.local.json
+
+# your personal strings for hooks/pre-commit (one regex per line)
+.private-patterns
+.env.*

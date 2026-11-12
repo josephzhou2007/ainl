@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP 进程解剖</title>
+<style>
+:root{
+  --bg:#fbfaf7; --surface:#ffffff; --surface2:#f4f2ed;
+  --text:#1b1a18; --muted:#5f5c55; --border:#e4e0d8;
+  --accent:#a8480f; --ok:#2c7a51; --dead:#bb3327; --warn:#9a6b10;
+  --s0:#4f6b62; --s0f:#e7efeb;
+  --s1:#2a63a8; --s1f:#e5eef8;
+  --s2:#6f47ad; --s2f:#eee8f8;
+  --s3:#157a72; --s3f:#e2f2f0;
+  --s4:#b06612; --s4f:#faeddb;
+  --code-bg:#f3f1ec;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15161a; --surface:#1e2026; --surface2:#25272e;
+    --text:#ecebe6; --muted:#a6a49c; --border:#343741;
+    --accent:#e9925c; --ok:#5fc48d; --dead:#f07a6d; --warn:#e0b352;
+    --s0:#8fb0a5; --s0f:#22302c;
+    --s1:#7fb2ec; --s1f:#1b2836;
+    --s2:#b799ef; --s2f:#262036;
+    --s3:#5ec9be; --s3f:#173030;
+    --s4:#eeaa5c; --s4f:#33260f;
+    --code-bg:#20222a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15161a; --surface:#1e2026; --surface2:#25272e;
+  --text:#ecebe6; --muted:#a6a49c; --border:#343741;
+  --accent:#e9925c; --ok:#5fc48d; --dead:#f07a6d; --warn:#e0b352;
+  --s0:#8fb0a5; --s0f:#22302c;
+  --s1:#7fb2ec; --s1f:#1b2836;
+  --s2:#b799ef; --s2f:#262036;
+  --s3:#5ec9be; --s3f:#173030;
+  --s4:#eeaa5c; --s4f:#33260f;
+  --code-bg:#20222a;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC","Source Han Sans SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.75; overflow-x:hidden;
+}
+.wrap{max-width:900px; margin:0 auto; padding:0 16px 96px}
+header{padding:56px 0 8px; border-bottom:1px solid var(--border); margin-bottom:40px}
+h1{font-size:1.9rem; line-height:1.3; margin:0 0 14px; letter-spacing:.01em}
+.lead{font-size:1.06rem; margin:0 0 10px}
+.lead b{color:var(--accent)}
+.sub{color:var(--muted); font-size:.92rem; margin:0 0 30px}
+h2{font-size:1.25rem; margin:56px 0 6px; padding-top:8px; letter-spacing:.01em}
+h2 .num{color:var(--accent); font-variant-numeric:tabular-nums; margin-right:.5em; font-weight:600}
+h3{font-size:1.02rem; margin:30px 0 8px}
+p{margin:0 0 14px}
+.muted{color:var(--muted)}
+.small{font-size:.9rem}
+code,kbd,pre{font-family:"Cascadia Mono",Consolas,"SF Mono",Menlo,"DejaVu Sans Mono",monospace}
+code{background:var(--code-bg); padding:.12em .38em; border-radius:4px; font-size:.86em; word-break:break-word}
+pre{background:var(--code-bg); border:1px solid var(--border); border-radius:10px;
+    padding:14px 16px; overflow-x:auto; font-size:.82rem; line-height:1.65; margin:0 0 16px}
+pre code{background:none; padding:0; font-size:1em}
+.card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 18px 4px; margin:0 0 18px}
+.note{border-left:3px solid var(--accent); background:var(--surface2); border-radius:0 10px 10px 0;
+      padding:14px 16px 2px; margin:20px 0}
+.note.dead{border-left-color:var(--dead)}
+figure{margin:26px 0 30px}
+.figbox{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px; overflow-x:auto}
+figcaption{color:var(--muted); font-size:.86rem; margin-top:10px; line-height:1.6}
+svg{display:block}
+svg.diag{min-width:860px; width:100%; height:auto}
+.tablebox{overflow-x:auto; border:1px solid var(--border); border-radius:12px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; min-width:760px; font-size:.87rem}
+th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--border); vertical-align:top}
+th{background:var(--surface2); font-weight:600; white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.tag{display:inline-block; font-size:.76rem; padding:.1em .55em; border-radius:999px; border:1px solid; white-space:nowrap}
+.t0{color:var(--s0); border-color:var(--s0); background:var(--s0f)}
+.t1{color:var(--s1); border-color:var(--s1); background:var(--s1f)}
+.t2{color:var(--s2); border-color:var(--s2); background:var(--s2f)}
+.t3{color:var(--s3); border-color:var(--s3); background:var(--s3f)}
+.t4{color:var(--s4); border-color:var(--s4); background:var(--s4f)}
+.x{color:var(--dead); font-weight:700}
+.v{color:var(--ok); font-weight:700}
+ul,ol{margin:0 0 16px; padding-left:1.3em}
+li{margin:0 0 8px}
+.log{font-size:.8rem}
+.log .ts{color:var(--muted)}
+.log .nm{color:var(--accent)}
+footer{color:var(--muted); font-size:.85rem; border-top:1px solid var(--border); padding-top:20px; margin-top:56px}
+@media (max-width:600px){
+  header{padding-top:36px}
+  h1{font-size:1.5rem}
+  h2{font-size:1.14rem; margin-top:44px}
+  body{font-size:15.5px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>MCP 服务器到底是什么？<br>——从你这台机器上的六个说起</h1>
+  <p class="lead">MCP 服务器<b>不是一种特殊的程序</b>。它就是 Claude 启动的一个普通进程，通过一根管道，用一行一条的文本协议跟 Claude 说话。</p>
+  <p class="sub">配置文件：<code>%APPDATA%\Claude\claude_desktop_config.json</code>　·　本机共六个服务器　·　案发时间 2026-09-19 21:01:39</p>
+</header>
+
+<p>打开那个配置文件，你会发现每一个「服务器」条目里写的，无非是<strong>一条命令行</strong>：一个可执行文件，加一串参数。Claude 做的事情，和你在 PowerShell 里敲下这行命令没有本质区别——它 <code>spawn</code> 出一个子进程，然后和它讲话。</p>
+
+<p>所以「MCP 服务器挂了」这句话，在操作系统眼里永远是同一件事：<strong>那个子进程没了</strong>。至于它背后真正干活的东西有没有一起没，那是另一个问题——本文后半段那次事故，答案恰好是「大多没有」。</p>
+
+<h2><span class="num">01</span>六个服务器，其实只有四种形状</h2>
+
+<p>把六条命令行摊开看，<code>node.exe</code> 出现了五次。但 <code>node.exe</code> 只告诉你「跑这段代码的解释器是 Node」，完全没告诉你这个程序<em>是什么</em>。真正区分它们的，是那个 node 进程里的代码<strong>把活儿交给了谁</strong>：</p>
+
+<ul>
+  <li><span class="tag t1">形状 1 · 纯 node 服务器</span>　活儿就在这个 node 进程里干完。<code>jshook</code>、<code>reqable-mcp</code>。</li>
+  <li><span class="tag t2">形状 2 · node 代理 → 另一门语言的子进程</span>　node 只是转发员，真正的引擎是它 <code>spawn</code> 出来的 Python。<code>scrapling</code>。</li>
+  <li><span class="tag t3">形状 3 · node 代理 → HTTP → 正在运行的 GUI 程序</span>　<code>anything-analyzer</code> → <code>127.0.0.1:23816</code>。</li>
+  <li><span class="tag t4">形状 4 · node 桥 → HTTP → Java 程序里的插件</span>　<code>burpsuite</code> → <code>127.0.0.1:9876</code> → Burp Suite 的 “MCP Full Control” 扩展。</li>
+  <li><span class="tag t0">例外 · 根本没有 node</span>　<code>ocr-pdf</code> 的命令是 <code>wsl.exe</code>，它跨进了 WSL 这个独立的 Linux 内核。</li>
+</ul>
+
+<figure>
+<div class="figbox">
+<svg class="diag" viewBox="0 0 880 545" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MCP 分层结构图：Claude 模型、MCP 客户端、stdio 传输层，以及本机六个服务器各自的进程与真正引擎">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7.2" refY="3.2" orient="auto">
+      <path d="M0,0 L7.5,3.2 L0,6.4 z" fill="var(--muted)"/>
+    </marker>
+    <marker id="ard" markerWidth="9" markerHeight="9" refX="7.2" refY="3.2" orient="auto">
+      <path d="M0,0 L7.5,3.2 L0,6.4 z" fill="var(--border)"/>
+    </marker>
+  </defs>
+  <g font-family="inherit">
+
+  <rect x="300" y="14" width="280" height="38" rx="9" fill="var(--surface2)" stroke="var(--border)"/>
+  <text x="440" y="38" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text)">Claude 模型（决定调用哪个工具）</text>
+  <line x1="440" y1="52" x2="440" y2="70" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ar)"/>
+
+  <rect x="230" y="72" width="420" height="40" rx="9" fill="var(--surface2)" stroke="var(--border)"/>
+  <text x="440" y="90" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--text)">MCP 客户端 = Claude Desktop / Claude Code</text>
+  <text x="440" y="106" text-anchor="middle" font-size="12" fill="var(--muted)">读 claude_desktop_config.json，逐条 spawn 子进程</text>
+  <line x1="440" y1="112" x2="440" y2="130" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ar)"/>
+
+  <rect x="18" y="132" width="844" height="42" rx="9" fill="var(--s1f)" stroke="var(--s1)" stroke-width="1.2"/>
+  <text x="440" y="150" text-anchor="middle" font-size="13" font-weight="600" fill="var(--s1)">传输层：stdio 管道 —— JSON-RPC 2.0，一行一条消息（stdout 走协议，stderr 走日志）</text>
+  <text x="440" y="166" text-anchor="middle" font-size="12" fill="var(--muted)">这是两个进程之间的一根管子，不是网络连接。一端的进程没了，管子就废了。</text>
+
+  <text x="18" y="196" font-size="12" font-weight="600" fill="var(--muted)">第一层：Claude 亲手 spawn 的那个子进程</text>
+
+  <rect x="18" y="204" width="135" height="80" rx="8" fill="var(--s0f)" stroke="var(--s0)" stroke-width="1.4"/>
+  <text x="28" y="222" font-size="13" font-weight="700" fill="var(--s0)">ocr-pdf</text>
+  <text x="28" y="240" font-size="12.5" font-weight="600" fill="var(--text)">wsl.exe</text>
+  <text x="28" y="257" font-size="12" fill="var(--muted)">→ python3</text>
+  <text x="28" y="273" font-size="12" fill="var(--muted)">ocr_server.py</text>
+  <circle cx="139" cy="218" r="9.5" fill="var(--ok)"/>
+  <text x="139" y="222.5" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">✓</text>
+
+  <rect x="163" y="204" width="135" height="80" rx="8" fill="var(--s2f)" stroke="var(--s2)" stroke-width="1.4"/>
+  <text x="173" y="222" font-size="13" font-weight="700" fill="var(--s2)">scrapling</text>
+  <text x="173" y="240" font-size="12.5" font-weight="600" fill="var(--text)">node.exe</text>
+  <text x="173" y="257" font-size="12" fill="var(--muted)">mcp-schema-</text>
+  <text x="173" y="273" font-size="12" fill="var(--muted)">fix-proxy.js</text>
+  <circle cx="284" cy="218" r="9.5" fill="var(--dead)"/>
+  <text x="284" y="222.5" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">✕</text>
+
+  <rect x="308" y="204" width="135" height="80" rx="8" fill="var(--s1f)" stroke="var(--s1)" stroke-width="1.4"/>
+  <text x="318" y="222" font-size="13" font-weight="700" fill="var(--s1)">jshook</text>
+  <text x="318" y="240" font-size="12.5" font-weight="600" fill="var(--text)">node.exe</text>
+  <text x="318" y="257" font-size="12" fill="var(--muted)">@jshookmcp/jshook</text>
+  <text x="318" y="273" font-size="12" fill="var(--muted)">dist/index.mjs</text>
+  <circle cx="429" cy="218" r="9.5" fill="var(--dead)"/>
+  <text x="429" y="222.5" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">✕</text>
+
+  <rect x="453" y="204" width="135" height="80" rx="8" fill="var(--s1f)" stroke="var(--s1)" stroke-width="1.4"/>
+  <text x="463" y="222" font-size="13" font-weight="700" fill="var(--s1)">reqable-mcp</text>
+  <text x="463" y="240" font-size="12.5" font-weight="600" fill="var(--text)">node.exe</text>
+  <text x="463" y="257" font-size="12" fill="var(--muted)">reqable-mcp-server</text>
+  <text x="463" y="273" font-size="12" fill="var(--muted)">bin/mcp-server.js</text>
+  <circle cx="574" cy="218" r="9.5" fill="var(--dead)"/>
+  <text x="574" y="222.5" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">✕</text>
+
+  <rect x="598" y="204" width="135" height="80" rx="8" fill="var(--s3f)" stroke="var(--s3)" stroke-width="1.4"/>
+  <text x="608" y="222" font-size="13" font-weight="700" fill="var(--s3)">anything-analyzer</text>
+  <text x="608" y="240" font-size="12.5" font-weight="600" fill="var(--text)">node.exe</text>
+  <text x="608" y="257" font-size="12" fill="var(--muted)">mcp-resilient-</text>
+  <text x="608" y="273" font-size="12" fill="var(--muted)">proxy.js</text>
+  <circle cx="719" cy="218" r="9.5" fill="var(--dead)"/>
+  <text x="719" y="222.5" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">✕</text>
+
+  <rect x="743" y="204" width="119" height="80" rx="8" fill="var(--s4f)" stroke="var(--s4)" stroke-width="1.4"/>
+  <text x="753" y="222" font-size="13" font-weight="700" fill="var(--s4)">burpsuite</text>
+  <text x="753" y="240" font-size="12.5" font-weight="600" fill="var(--text)">node.exe</text>
+  <text x="753" y="257" font-size="12" fill="var(--muted)">burp-mcp-full/</text>
+  <text x="753" y="273" font-size="12" fill="var(--muted)">mcp-bridge.js</text>
+  <circle cx="848" cy="218" r="9.5" fill="var(--dead)"/>
+  <text x="848" y="222.5" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">✕</text>
+
+  <line x1="85"  y1="284" x2="85"  y2="304" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="230" y1="284" x2="230" y2="304" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="375" y1="284" x2="375" y2="304" stroke="var(--border)" stroke-width="1.3" marker-end="url(#ard)"/>
+  <line x1="520" y1="284" x2="520" y2="304" stroke="var(--border)" stroke-width="1.3" marker-end="url(#ard)"/>
+  <line x1="665" y1="284" x2="665" y2="304" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="802" y1="284" x2="802" y2="304" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar)"/>
+
+  <text x="18" y="300" font-size="12" font-weight="600" fill="var(--muted)">第二层：跨界的方式</text>
+
+  <rect x="18"  y="306" width="135" height="46" rx="7" fill="var(--surface)" stroke="var(--s0)" stroke-dasharray="4 3"/>
+  <text x="85.5" y="324" text-anchor="middle" font-size="12" fill="var(--s0)">WSL 边界</text>
+  <text x="85.5" y="341" text-anchor="middle" font-size="12" fill="var(--muted)">另一个 Linux 内核</text>
+
+  <rect x="163" y="306" width="135" height="46" rx="7" fill="var(--surface)" stroke="var(--s2)" stroke-dasharray="4 3"/>
+  <text x="230.5" y="324" text-anchor="middle" font-size="12" fill="var(--s2)">spawn() 子进程</text>
+  <text x="230.5" y="341" text-anchor="middle" font-size="12" fill="var(--muted)">又是一根 stdio 管道</text>
+
+  <rect x="308" y="306" width="135" height="46" rx="7" fill="var(--surface)" stroke="var(--border)" stroke-dasharray="4 3"/>
+  <text x="375.5" y="333" text-anchor="middle" font-size="12" fill="var(--muted)">没有边界</text>
+
+  <rect x="453" y="306" width="135" height="46" rx="7" fill="var(--surface)" stroke="var(--border)" stroke-dasharray="4 3"/>
+  <text x="520.5" y="333" text-anchor="middle" font-size="12" fill="var(--muted)">没有边界</text>
+
+  <rect x="598" y="306" width="135" height="46" rx="7" fill="var(--surface)" stroke="var(--s3)" stroke-dasharray="4 3"/>
+  <text x="665.5" y="324" text-anchor="middle" font-size="12" fill="var(--s3)">HTTP 本地端口</text>
+  <text x="665.5" y="341" text-anchor="middle" font-size="12" fill="var(--muted)">127.0.0.1:23816</text>
+
+  <rect x="743" y="306" width="119" height="46" rx="7" fill="var(--surface)" stroke="var(--s4)" stroke-dasharray="4 3"/>
+  <text x="802.5" y="324" text-anchor="middle" font-size="12" fill="var(--s4)">HTTP + Bearer</text>
+  <text x="802.5" y="341" text-anchor="middle" font-size="12" fill="var(--muted)">127.0.0.1:9876</text>
+
+  <line x1="85"  y1="352" x2="85"  y2="372" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="230" y1="352" x2="230" y2="372" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="375" y1="352" x2="375" y2="372" stroke="var(--border)" stroke-width="1.3" marker-end="url(#ard)"/>
+  <line x1="520" y1="352" x2="520" y2="372" stroke="var(--border)" stroke-width="1.3" marker-end="url(#ard)"/>
+  <line x1="665" y1="352" x2="665" y2="372" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="802" y1="352" x2="802" y2="372" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar)"/>
+
+  <text x="18" y="390" font-size="12" font-weight="600" fill="var(--muted)">第三层：真正干活的引擎</text>
+
+  <rect x="18"  y="396" width="135" height="62" rx="8" fill="var(--s0f)" stroke="var(--s0)"/>
+  <text x="85.5" y="418" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">Python 3（Linux）</text>
+  <text x="85.5" y="436" text-anchor="middle" font-size="12" fill="var(--muted)">ocr_server.py</text>
+  <text x="85.5" y="451" text-anchor="middle" font-size="12" fill="var(--muted)">活在 WSL 虚拟机里</text>
+
+  <rect x="163" y="396" width="135" height="62" rx="8" fill="var(--s2f)" stroke="var(--s2)"/>
+  <text x="230.5" y="418" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">scrapling</text>
+  <text x="230.5" y="436" text-anchor="middle" font-size="12" fill="var(--muted)">Python 命令行程序</text>
+  <text x="230.5" y="451" text-anchor="middle" font-size="12" fill="var(--muted)">node 代理的亲生子进程</text>
+
+  <rect x="308" y="396" width="135" height="62" rx="8" fill="var(--s1f)" stroke="var(--s1)"/>
+  <text x="375.5" y="424" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">就是那个 node 进程</text>
+  <text x="375.5" y="442" text-anchor="middle" font-size="12" fill="var(--muted)">工具在它自己体内</text>
+
+  <rect x="453" y="396" width="135" height="62" rx="8" fill="var(--s1f)" stroke="var(--s1)"/>
+  <text x="520.5" y="424" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">就是那个 node 进程</text>
+  <text x="520.5" y="442" text-anchor="middle" font-size="12" fill="var(--muted)">工具在它自己体内</text>
+
+  <rect x="598" y="396" width="135" height="62" rx="8" fill="var(--s3f)" stroke="var(--s3)"/>
+  <text x="665.5" y="418" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">Analyzer GUI 应用</text>
+  <text x="665.5" y="436" text-anchor="middle" font-size="12" fill="var(--muted)">独立运行的程序</text>
+  <text x="665.5" y="451" text-anchor="middle" font-size="12" fill="var(--muted)">不是 Claude 的子进程</text>
+
+  <rect x="743" y="396" width="119" height="62" rx="8" fill="var(--s4f)" stroke="var(--s4)"/>
+  <text x="802.5" y="418" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">Burp Suite（Java）</text>
+  <text x="802.5" y="436" text-anchor="middle" font-size="12" fill="var(--muted)">MCP Full Control 扩展</text>
+  <text x="802.5" y="451" text-anchor="middle" font-size="12" fill="var(--muted)">78 个工具</text>
+
+  <line x1="18" y1="482" x2="862" y2="482" stroke="var(--border)"/>
+  <rect x="18"  y="500" width="12" height="12" rx="3" fill="var(--s1f)" stroke="var(--s1)"/>
+  <text x="36"  y="510" font-size="12" fill="var(--muted)">形状 1 纯 node</text>
+  <rect x="150" y="500" width="12" height="12" rx="3" fill="var(--s2f)" stroke="var(--s2)"/>
+  <text x="168" y="510" font-size="12" fill="var(--muted)">形状 2 node→子进程</text>
+  <rect x="320" y="500" width="12" height="12" rx="3" fill="var(--s3f)" stroke="var(--s3)"/>
+  <text x="338" y="510" font-size="12" fill="var(--muted)">形状 3 node→HTTP→GUI</text>
+  <rect x="520" y="500" width="12" height="12" rx="3" fill="var(--s4f)" stroke="var(--s4)"/>
+  <text x="538" y="510" font-size="12" fill="var(--muted)">形状 4 node→HTTP→Java 插件</text>
+  <rect x="744" y="500" width="12" height="12" rx="3" fill="var(--s0f)" stroke="var(--s0)"/>
+  <text x="762" y="510" font-size="12" fill="var(--muted)">例外 WSL</text>
+  <circle cx="24" cy="530" r="7" fill="var(--dead)"/>
+  <text x="24" y="534" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">✕</text>
+  <text x="38" y="534" font-size="12" fill="var(--muted)">21:01:39 被扫掉的五个（直系子进程是 node.exe）</text>
+  <circle cx="480" cy="530" r="7" fill="var(--ok)"/>
+  <text x="480" y="534" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">✓</text>
+  <text x="494" y="534" font-size="12" fill="var(--muted)">毫发无伤的那一个（直系子进程是 wsl.exe）</text>
+  </g>
+</svg>
+</div>
+<figcaption>图 1　同一根 stdio 管道下面，挂着四种完全不同的东西。Claude 看到的只有「第一层」，你杀进程时看到的也只有「第一层」——误会就是在这里发生的。</figcaption>
+</figure>
+
+<h2><span class="num">02</span>两个代理，为什么要多这一层</h2>
+
+<p>你机器上有三个 node 程序，它们自己不提供任何工具，只是<strong>中间人</strong>。为什么要写它们？各自的源码头部写得很清楚。</p>
+
+<div class="card">
+<h3><code>C:\\Users\\you\Tools\mcp-schema-fix-proxy.js</code>　<span class="tag t2">124 行</span></h3>
+<p class="small">它开头就 <code>const { spawn } = require('child_process')</code>——一上来就暴露了身份：它要生一个孩子。</p>
+<p>问题出在类型描述上。Python 那边的 Pydantic / FastMCP 把「可选参数 <code>Optional[X]</code>」写成：</p>
+<pre><code>{"anyOf": [{"type": "X"}, {"type": "null"}], "default": null}</code></pre>
+<p>而 Claude 的 schema 转换层会把 <code>anyOf</code> 丢掉，字段就只剩下 <code>{"default": null}</code>——既看不出类型，又像是必填，于是调用一律失败。这个代理<strong>透明中继 stdio</strong>，只在 <code>tools/list</code> 的响应经过时动手，把 <code>anyOf</code> 展平成单一 type。其余所有消息原样放行。</p>
+</div>
+
+<div class="card">
+<h3><code>C:\\Users\\you\Tools\mcp-resilient-proxy.js</code>　<span class="tag t3">205 行</span></h3>
+<p>它替代了 <code>mcp-remote</code>，解决的是一个启动顺序问题：后端是个 GUI 应用，如果它没开，<code>tools/list</code> 就会失败；<code>tools/list</code> 一失败，整个 MCP 服务器就起不来，Claude 面板上挂一个红叉。</p>
+<p>策略是缓存：<code>tools/list</code> 成功一次就把结果写到磁盘；后端离线时用缓存清单应答，服务器照常启动（面板不报红）；只有真的发起 <code>tools/call</code> 时，才返回一句清楚的「请先启动后端」。</p>
+</div>
+
+<div class="card">
+<h3><code>D:\code\local\projects\reverse-skill\burp-mcp-full\mcp-bridge.js</code>　<span class="tag t4">408 行</span></h3>
+<p>头部自述：把自定义的 HTTP API（端口 9876）桥接成标准的 MCP JSON-RPC 2.0 stdio 协议。它从 <code>~/.burp-mcp-token</code> 或环境变量 <code>$BURP_MCP_TOKEN</code> 读一个令牌，以 <code>Authorization: Bearer</code> 发出去；<code>GET /tools</code> 取工具清单，<code>POST /</code> 发起调用。离线缓存的思路和上面那个代理一模一样。另一端的 Burp 插件是同一个仓库里的 Java 扩展（gradle 构建，源码在 <code>src/</code>）。</p>
+</div>
+
+<div class="note">
+<p class="small"><strong>顺带记住一条规矩：</strong>这三个程序的日志全都写 <strong>stderr</strong>，一行都不写 stdout。因为 stdout 是协议专用车道——你往里多打一个 <code>console.log</code>，对面就会读到一行不是 JSON 的垃圾，整条连接当场报废。</p>
+</div>
+
+<h2><span class="num">03</span>六个服务器的完整账本</h2>
+
+<div class="tablebox">
+<table>
+<thead><tr><th>名字</th><th>Claude 实际执行的命令</th><th>形状</th><th>node 被杀会死什么</th><th>还活着的是什么</th></tr></thead>
+<tbody>
+<tr>
+  <td><code>ocr-pdf</code></td>
+  <td><code>wsl.exe</code> → <code>python3 /mnt/d/code/local/projects/OCR/mcp/ocr_server.py</code></td>
+  <td><span class="tag t0">WSL 例外</span></td>
+  <td class="v">什么都不死</td>
+  <td>全部。子进程是 <code>wsl.exe</code>，压根不在筛选范围内</td>
+</tr>
+<tr>
+  <td><code>scrapling</code></td>
+  <td><code>node.exe C:\\Users\\you\Tools\mcp-schema-fix-proxy.js C:\\Users\\you\.local\bin\scrapling</code></td>
+  <td><span class="tag t2">形状 2</span></td>
+  <td class="x">node 代理死，通往 Python 的管道被切断</td>
+  <td>引擎本身是 Python，不是 node；但它是代理 spawn 出来的孩子，父进程一没就成了孤儿</td>
+</tr>
+<tr>
+  <td><code>jshook</code></td>
+  <td><code>node.exe …\node_modules\@jshookmcp\jshook\dist\index.mjs</code></td>
+  <td><span class="tag t1">形状 1</span></td>
+  <td class="x">全部。工具实现就在这个进程里</td>
+  <td>无</td>
+</tr>
+<tr>
+  <td><code>reqable-mcp</code></td>
+  <td><code>node.exe …\node_modules\reqable-mcp-server\bin\mcp-server.js</code></td>
+  <td><span class="tag t1">形状 1</span></td>
+  <td class="x">全部。工具实现就在这个进程里</td>
+  <td>无</td>
+</tr>
+<tr>
+  <td><code>anything-analyzer</code></td>
+  <td><code>node.exe C:\\Users\\you\Tools\mcp-resilient-proxy.js http://127.0.0.1:23816/mcp</code></td>
+  <td><span class="tag t3">形状 3</span></td>
+  <td class="x">只死那层薄薄的 node 代理</td>
+  <td class="v">Analyzer GUI 应用照常运行，端口 23816 一直在听</td>
+</tr>
+<tr>
+  <td><code>burpsuite</code></td>
+  <td><code>node.exe D:\code\local\projects\reverse-skill\burp-mcp-full\mcp-bridge.js</code></td>
+  <td><span class="tag t4">形状 4</span></td>
+  <td class="x">只死那座 node 桥</td>
+  <td class="v">Burp Suite（Java）和它的 MCP Full Control 扩展照常运行，78 个工具一个没少，端口 9876 一直在听</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<p class="small muted">读这张表时请留意最后两行：<strong>「MCP 已断开」并不等于 Burp 崩了或者 Analyzer 崩了。</strong>断的只是 Claude 和它们之间那根通信绳。</p>
+
+<h2><span class="num">04</span>stdio 传输：两个进程之间的一根管子</h2>
+
+<p>Claude 启动服务器进程的时候，会把它的 <code>stdin</code> 和 <code>stdout</code> 接到管道上（这正是 <code>spawn</code> 能做的事），然后双方在这根管子上讲 <strong>JSON-RPC 2.0</strong>：<strong>一行一条消息</strong>，换行符就是分隔符。</p>
+
+<p>Claude 往服务器的 <code>stdin</code> 写一行：</p>
+<pre><code>{"jsonrpc":"2.0","id":1,"method":"tools/list"}</code></pre>
+
+<p>服务器往自己的 <code>stdout</code> 回一行：</p>
+<pre><code>{"jsonrpc":"2.0","id":1,"result":{"tools":[
+  {"name":"fetch","description":"抓取一个网页","inputSchema":{"type":"object",
+   "properties":{"url":{"type":"string"},"timeout":{"type":"number"}},
+   "required":["url"]}}
+]}}</code></pre>
+
+<p><code>id</code> 用来把回答和提问配对（可以有好几条同时在飞）；真正调用工具时，<code>method</code> 换成 <code>tools/call</code>。第 02 节那个 schema 代理，改的就是这个 <code>inputSchema</code> 里的东西。</p>
+
+<div class="note">
+<p><strong>关键一点：这不是网络连接。</strong>没有 IP，没有端口，没有 socket，别的程序连不进来。它是内核里的一个缓冲区，两端各握着一个文件描述符。只要有一端的进程消失，管子立刻失效——另一端读到 EOF，或者写入时收到「管道中断」。</p>
+<p class="small">所以日志里那句 <code>Server transport closed unexpectedly, this is likely due to the process exiting early</code>，翻译过来就是：<em>我这头还在，管子那头的进程没了。</em></p>
+</div>
+
+<h2><span class="num">05</span>2026-09-19 21:01:39：一条命令带走五个</h2>
+
+<p>当时的目的完全正当：清理泄漏的 Playwright driver 进程。执行的是这一行——</p>
+
+<pre><code>Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force</code></pre>
+
+<p>然后，<code>%LOCALAPPDATA%\Claude\logs\mcp.log</code> 在 <strong>96 毫秒</strong>内连着记下五行：</p>
+
+<pre class="log"><code><span class="ts">02:01:39.421Z</span>  [<span class="nm">scrapling</span>]          Server transport closed
+<span class="ts">02:01:39.442Z</span>  [<span class="nm">burpsuite</span>]          Server transport closed
+<span class="ts">02:01:39.465Z</span>  [<span class="nm">reqable-mcp</span>]        Server transport closed
+<span class="ts">02:01:39.486Z</span>  [<span class="nm">anything-analyzer</span>]  Server transport closed
+<span class="ts">02:01:39.517Z</span>  [<span class="nm">jshook</span>]             Server transport closed</code></pre>
+
+<p class="small muted">（日志用 UTC，02:01:39Z 就是本地 21:01:39。）每条后面都跟着同一句：<code>Server transport closed unexpectedly, this is likely due to the process exiting early.</code></p>
+
+<div class="note dead">
+<p><strong>看名单：不多不少，正好是那五个「直系子进程是 <code>node.exe</code>」的服务器。<code>ocr-pdf</code> 不在里面。</strong></p>
+<p class="small">因为 Claude 为 <code>ocr-pdf</code> spawn 出来的那个进程叫 <code>wsl.exe</code>，不叫 <code>node.exe</code>。<code>Get-Process node</code> 按<strong>映像名</strong>筛选，它没被匹配到，那根管子一点事都没有——更不用说管子那头的 <code>python3</code>，它根本活在另一个 Linux 内核里。</p>
+</div>
+
+<figure>
+<div class="figbox">
+<svg class="diag" viewBox="0 0 880 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="21:01:39 那一刻的进程树：Stop-Process 按映像名匹配到所有 node.exe 子进程，wsl.exe 不在范围内；三个后端程序继续运行">
+  <defs>
+    <marker id="ar2" markerWidth="9" markerHeight="9" refX="7.2" refY="3.2" orient="auto">
+      <path d="M0,0 L7.5,3.2 L0,6.4 z" fill="var(--muted)"/>
+    </marker>
+  </defs>
+  <g font-family="inherit">
+
+  <text x="18" y="22" font-size="13" font-weight="700" fill="var(--text)">21:01:39 那一刻的进程树</text>
+
+  <rect x="350" y="34" width="180" height="36" rx="8" fill="var(--surface2)" stroke="var(--border)"/>
+  <text x="440" y="57" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text)">Claude（父进程）</text>
+
+  <path d="M440,70 L440,86" stroke="var(--muted)" stroke-width="1.3"/>
+  <path d="M74,86 L806,86" stroke="var(--muted)" stroke-width="1.3"/>
+  <path d="M74,86 L74,110"   stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar2)"/>
+  <path d="M196,86 L196,110" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar2)"/>
+  <path d="M318,86 L318,110" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar2)"/>
+  <path d="M440,86 L440,110" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar2)"/>
+  <path d="M562,86 L562,110" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar2)"/>
+  <path d="M684,86 L684,110" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar2)"/>
+  <path d="M806,86 L806,110" stroke="var(--muted)" stroke-width="1.3" marker-end="url(#ar2)"/>
+
+  <rect x="136" y="100" width="730" height="72" rx="10" fill="none" stroke="var(--dead)" stroke-width="1.8" stroke-dasharray="7 5"/>
+  <text x="866" y="188" text-anchor="end" font-size="12" font-weight="600" fill="var(--dead)">Stop-Process 的匹配范围：映像名 == node.exe</text>
+
+  <rect x="18" y="112" width="112" height="50" rx="7" fill="var(--s0f)" stroke="var(--s0)" stroke-width="1.4"/>
+  <text x="74" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--s0)">wsl.exe</text>
+  <text x="74" y="150" text-anchor="middle" font-size="12" fill="var(--muted)">ocr-pdf</text>
+
+  <rect x="140" y="112" width="112" height="50" rx="7" fill="var(--s2f)" stroke="var(--s2)" stroke-width="1.4"/>
+  <text x="196" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--s2)">node.exe</text>
+  <text x="196" y="150" text-anchor="middle" font-size="12" fill="var(--muted)">scrapling</text>
+
+  <rect x="262" y="112" width="112" height="50" rx="7" fill="var(--s1f)" stroke="var(--s1)" stroke-width="1.4"/>
+  <text x="318" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--s1)">node.exe</text>
+  <text x="318" y="150" text-anchor="middle" font-size="12" fill="var(--muted)">jshook</text>
+
+  <rect x="384" y="112" width="112" height="50" rx="7" fill="var(--s1f)" stroke="var(--s1)" stroke-width="1.4"/>
+  <text x="440" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--s1)">node.exe</text>
+  <text x="440" y="150" text-anchor="middle" font-size="12" fill="var(--muted)">reqable-mcp</text>
+
+  <rect x="506" y="112" width="112" height="50" rx="7" fill="var(--s3f)" stroke="var(--s3)" stroke-width="1.4"/>
+  <text x="562" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--s3)">node.exe</text>
+  <text x="562" y="150" text-anchor="middle" font-size="12" fill="var(--muted)">anything-analyzer</text>
+
+  <rect x="628" y="112" width="112" height="50" rx="7" fill="var(--s4f)" stroke="var(--s4)" stroke-width="1.4"/>
+  <text x="684" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--s4)">node.exe</text>
+  <text x="684" y="150" text-anchor="middle" font-size="12" fill="var(--muted)">burpsuite</text>
+
+  <rect x="750" y="112" width="112" height="50" rx="7" fill="var(--surface2)" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text x="806" y="132" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--muted)">node.exe ×N</text>
+  <text x="806" y="150" text-anchor="middle" font-size="12" fill="var(--muted)">真正想清理的目标</text>
+
+  <text x="18" y="212" font-size="12.5" font-weight="600" fill="var(--dead)">结果：五根 stdio 管道同时断开 → mcp.log 里的那五行。可是管子另一端呢——</text>
+
+  <path d="M74,162  L74,196  L122,196 L122,248" fill="none" stroke="var(--s0)" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <path d="M196,162 L196,230 L334,230 L334,248" fill="none" stroke="var(--s2)" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <path d="M562,162 L562,230 L546,230 L546,248" fill="none" stroke="var(--s3)" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <path d="M684,162 L684,230 L758,230 L758,248" fill="none" stroke="var(--s4)" stroke-width="1.2" stroke-dasharray="3 3"/>
+
+  <rect x="22"  y="248" width="200" height="74" rx="8" fill="var(--s0f)" stroke="var(--s0)"/>
+  <text x="122" y="270" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--ok)">✓ 完全没事</text>
+  <text x="122" y="289" text-anchor="middle" font-size="12" fill="var(--text)">WSL 里的 python3</text>
+  <text x="122" y="307" text-anchor="middle" font-size="12" fill="var(--muted)">另一个内核，管子也没断</text>
+
+  <rect x="234" y="248" width="200" height="74" rx="8" fill="var(--s2f)" stroke="var(--s2)"/>
+  <text x="334" y="270" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--warn)">⚠ 管道被切断</text>
+  <text x="334" y="289" text-anchor="middle" font-size="12" fill="var(--text)">scrapling（Python 引擎）</text>
+  <text x="334" y="307" text-anchor="middle" font-size="12" fill="var(--muted)">父进程没了，沦为孤儿</text>
+
+  <rect x="446" y="248" width="200" height="74" rx="8" fill="var(--s3f)" stroke="var(--s3)"/>
+  <text x="546" y="270" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--ok)">✓ 照常运行</text>
+  <text x="546" y="289" text-anchor="middle" font-size="12" fill="var(--text)">Analyzer GUI 应用</text>
+  <text x="546" y="307" text-anchor="middle" font-size="12" fill="var(--muted)">127.0.0.1:23816 一直在听</text>
+
+  <rect x="658" y="248" width="200" height="74" rx="8" fill="var(--s4f)" stroke="var(--s4)"/>
+  <text x="758" y="270" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--ok)">✓ 照常运行</text>
+  <text x="758" y="289" text-anchor="middle" font-size="12" fill="var(--text)">Burp Suite（Java）</text>
+  <text x="758" y="307" text-anchor="middle" font-size="12" fill="var(--muted)">127.0.0.1:9876 一直在听</text>
+
+  <line x1="18" y1="346" x2="862" y2="346" stroke="var(--border)"/>
+  <text x="18" y="370" font-size="12.5" fill="var(--text)">被扫掉的不是「五个 MCP 服务器」，而是「五个恰好由 node.exe 解释执行的程序」——</text>
+  <text x="18" y="390" font-size="12.5" fill="var(--text)">其中两个只是薄薄的桥，一个只是转发员，真正的引擎多半还好端端地开着。</text>
+  <text x="18" y="410" font-size="12" fill="var(--muted)">Claude Code 随后在 21:03:18–21:03:44 把它们全部重启：13 个 node 进程的启动时间挤在 26 秒之内。</text>
+  </g>
+</svg>
+</div>
+<figcaption>图 2　同一次扫射的两种后果：管道断开是普遍的，进程死亡不是。</figcaption>
+</figure>
+
+<h3>怎么确认「确实是被集体重启的」</h3>
+<p>正常情况下，各个 node 进程是在不同时刻陆续启动的，启动时间应该散落在几小时甚至几天里。而当时 <strong>13 个 node 进程的启动时间全部落在 21:03:18–21:03:44 这 26 秒窗口内</strong>。启动时间高度一致，本身就是「它们刚刚被一起重新拉起来」的证据。</p>
+
+<h2><span class="num">06</span>为什么 <code>node.exe</code> 是个糟糕的筛选条件</h2>
+
+<p>这是整件事唯一真正的教训，值得单独说清楚：</p>
+
+<div class="note">
+<p><strong>映像名（<code>node.exe</code>、<code>python.exe</code>、<code>java.exe</code>）说的是「用哪个解释器跑」，不是「这是什么程序」。</strong></p>
+<p>就像你不会因为要删掉一份 Word 文档，就把所有 <code>WINWORD.EXE</code> 全关掉。程序真正的身份写在<strong>命令行</strong>里：<code>Win32_Process.CommandLine</code>。</p>
+</div>
+
+<p>所以那次清理本该写成这样——先筛出真正想杀的那些，看一眼确认，再动手：</p>
+
+<pre><code># 1) 先看清楚要杀谁（永远先跑这一步）
+Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" |
+  Select-Object ProcessId, CreationDate, CommandLine |
+  Format-List
+
+# 2) 只对命令行匹配的那些下手
+Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" |
+  Where-Object { $_.CommandLine -like '*playwright*' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }</code></pre>
+
+<p class="small muted">注意 <code>Get-Process</code> 返回的对象上<em>没有</em> <code>CommandLine</code> 这个属性，所以必须换成 <code>Get-CimInstance Win32_Process</code>。顺手把 <code>CreationDate</code> 也打出来：启动时间是判断「这是不是泄漏出来的野进程」的好线索。</p>
+
+<p>还有一条更根本的：<strong>修漏比扫地重要。</strong>Playwright driver 会泄漏，说明某段代码没有关掉它启动的浏览器。定期拿扫把横扫一遍，只是把问题从「泄漏」变成「泄漏 ＋ 每隔一阵误伤一批无辜进程」。去找那个没被调用的 <code>close()</code>。</p>
+
+<h2><span class="num">07</span>两种边界，记住它们的区别</h2>
+
+<div class="tablebox">
+<table>
+<thead><tr><th></th><th>stdio 管道</th><th>本地 HTTP 端口</th></tr></thead>
+<tbody>
+<tr><td>本机例子</td><td>六个服务器的第一跳，全都是它</td><td><code>:23816</code> Analyzer、<code>:9876</code> Burp</td></tr>
+<tr><td>是谁的进程</td><td>必须是 Claude 的子进程</td><td>谁都行，独立运行的程序</td></tr>
+<tr><td>Claude 重启之后</td><td>管道失效，服务器必须重新 spawn</td><td class="v">后端毫发无损，重连即可</td></tr>
+<tr><td>需要认证吗</td><td>不需要——管子只有两头，别人进不来</td><td>需要。端口是开放的，所以 Burp 那边才要 <code>Authorization: Bearer</code> 令牌</td></tr>
+<tr><td>前置条件</td><td>命令能跑起来就行</td><td>那个应用必须先开着（这正是 resilient proxy 要做离线缓存的原因）</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2><span class="num">08</span>一句话总结</h2>
+
+<p>MCP 服务器是<strong>一个进程</strong>。它的身份写在命令行里，不写在映像名里。它和 Claude 之间是<strong>一根管子</strong>，管子断了不等于它背后的东西死了。而 <code>ocr-pdf</code> 之所以能在那次扫射里安然无恙，仅仅因为它的第一跳叫 <code>wsl.exe</code>——操作系统就是这么字面、这么不讲情面。</p>
+
+<footer>
+本文所有命令、路径、端口、日志行与时间戳，均来自本机 <code>%APPDATA%\Claude\claude_desktop_config.json</code>、三个代理程序的源码头部，以及 <code>%LOCALAPPDATA%\Claude\logs\mcp.log</code>。
+</footer>
+
+</div>
+</body>
+</html>

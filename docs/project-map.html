@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI-Native Learning · 项目全景图</title>
+<style>
+:root{--ink:#1b1f23;--dim:#5a636c;--line:#dfe3e8;--bg:#fff;--soft:#f6f8fa;--ok:#1a7f37;--warn:#9a6700;--off:#8c959f;--accent:#0a58ca;--sub:#b45309}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1200px;margin:0 auto;padding:40px 24px 90px}
+h1{font-size:28px;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:19px;margin:52px 0 12px;padding-bottom:7px;border-bottom:2px solid var(--ink)}
+h3{font-size:15px;margin:22px 0 8px;color:var(--dim)}
+p{margin:8px 0}
+.sub{color:var(--dim);font-size:13px;margin:0 0 26px}
+code,.mono{font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:.88em}
+code{background:var(--soft);padding:1px 5px;border-radius:3px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:var(--soft);font-weight:600;white-space:nowrap}
+td.n{white-space:nowrap}
+tbody tr:nth-child(even){background:#fcfdfe}
+.box{border:1px solid var(--line);border-left:4px solid var(--ink);background:var(--soft);padding:14px 18px;margin:14px 0;border-radius:0 4px 4px 0}
+.box.good{border-left-color:var(--ok)}
+.box.no{border-left-color:var(--off)}
+ul{margin:8px 0;padding-left:22px}li{margin:3px 0}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:4px;padding:10px 6px;background:#fff}
+svg{display:block}
+.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:10px;border:1px solid var(--line);color:var(--dim);background:#fff;white-space:nowrap}
+.tag.s{color:var(--sub);border-color:#f0d9b5;background:#fffaf2}
+.tag.m{color:var(--accent);border-color:#cfe0fb;background:#f5f9ff}
+.pit{border:1px solid var(--line);border-radius:4px;padding:12px 15px;margin:10px 0}
+.pit b{display:block;font-size:14px;margin-bottom:5px}
+.pit div{font-size:13.5px;margin:3px 0}
+.pit span{color:var(--dim);display:inline-block;min-width:46px;font-weight:600}
+footer{margin-top:60px;padding-top:14px;border-top:1px solid var(--line);color:var(--dim);font-size:12.5px}
+@media(max-width:700px){.wrap{padding:24px 14px 60px}h1{font-size:22px}table{font-size:12.5px}th,td{padding:5px 6px}}
+</style>
+</head>
+<body><div data-stale-note style="margin:0;padding:12px 16px;background:#7a4b00;color:#fff;font:14px/1.5 system-ui,sans-serif;border-bottom:2px solid #ffb84d">⚠️ 快照：2026-09-19，22 次提交。此后又有 29 次提交（官方 token 通道、WebAssign 作答与提交、LTI 自愈、无窗口浏览器、耗时追踪、/todo 单入口）。现状以 docs/dev-setup.md 和 docs/optimization-goals.md 为准。</div><div class="wrap">
+
+<h1>AI-Native Learning — 项目全景图</h1>
+<p class="sub">仓库 <span class="mono">D:\code\local\projects\AI-native-learning</span> · 覆盖 2026-09-14 → 2026-09-19 · 22 次提交 / 1 主干 + 3 特性分支（均已合并，worktree 已删）</p>
+
+<h2>1 · 一句话定位 + 现在能做什么</h2>
+<div class="box">
+<b>不是 Canvas 的替代品，是 Canvas 的收件箱兼代理人。</b>
+学生不需要学校批准就能用；代理替他穿过 Canvas 加 4~5 个第三方站点，把「找东西」消灭掉，只剩「做东西」和「学东西」。
+</div>
+<div class="box good">
+<b>今天真的能跑：</b>
+<ul>
+<li>每天 08:00 <b>早报推到 Telegram</b>——今天要交什么、过期未交、新公告（APScheduler + <span class="mono">ainl.brief</span>）</li>
+<li><b>/todo 对话式 bot</b>：按课分块（A/B/C…）、条目编码 A1/B2、可直接在聊天里交作业；<b>多文件/多照片一次提交</b>（一次 POST 带全部 file_ids），回执列出文件名与下一步</li>
+<li><b>Canvas 读取走浏览器会话 cookie</b>（无需 API token，SSO+Duo 人工登录一次，storage_state 复用；也支持 Bearer token）</li>
+<li><b>手写 → LaTeX → WIRIS 方言 MathML</b>：可插拔视觉提供商（Gemini / Qwen / Mathpix / Claude）、评测工具、4 个黄金用例逐字节对齐 WebAssign 真实编码</li>
+</ul>
+</div>
+<div class="box no">
+<b>还没有的（明确未做，不是遗漏）：</b>
+<ul>
+<li><b>把答案填回 WebAssign</b>（M2-M-02，填入接口已逆向出来但未落地）</li>
+<li><b>一键深链直达</b>（L7-C，需要一个公网 HTTPS 端点）</li>
+<li><b>多用户 / OAuth</b>（仍是单人单机，凭证只在本机环境变量与 <span class="mono">~/.ainl/</span>）</li>
+<li>L2 路由表 YAML、L3 知识库、L4 任务拆解——一行代码都还没有</li>
+</ul>
+</div>
+
+<h2>2 · 时间线</h2>
+<div class="scroll">
+<svg viewBox="0 0 1160 290" width="100%" style="min-width:680px" role="img" aria-label="2026-09-14 至 09-19 的项目时间线">
+<defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#1b1f23"/></marker></defs>
+<line x1="60" y1="150" x2="1110" y2="150" stroke="#1b1f23" stroke-width="2" marker-end="url(#ar)"/>
+<g font-size="12" fill="#5a636c" text-anchor="middle">
+<g stroke="#8c959f" stroke-width="1">
+<line x1="80" y1="144" x2="80" y2="156"/><line x1="270" y1="144" x2="270" y2="156"/><line x1="480" y1="144" x2="480" y2="156"/><line x1="690" y1="144" x2="690" y2="156"/><line x1="880" y1="144" x2="880" y2="156"/><line x1="1050" y1="144" x2="1050" y2="156"/>
+</g>
+<text x="80" y="172">09-14</text><text x="270" y="172">09-15</text><text x="480" y="172">09-16</text><text x="690" y="172">09-17</text><text x="880" y="172">09-18</text><text x="1050" y="172">09-19</text>
+</g>
+<g font-size="13" text-anchor="middle">
+<rect x="55" y="112" width="250" height="26" rx="13" fill="#eef2f7" stroke="#cfd8e3"/><text x="180" y="130" fill="#1b1f23">逆向调研 M0</text>
+<rect x="320" y="112" width="180" height="26" rx="13" fill="#eaf5ec" stroke="#b7ddc0"/><text x="410" y="130" fill="#1a7f37">M1 早报</text>
+<rect x="515" y="112" width="215" height="26" rx="13" fill="#eaf1fb" stroke="#bcd4f5"/><text x="622" y="130" fill="#0a58ca">M2-A 对话 bot</text>
+<rect x="745" y="112" width="365" height="26" rx="13" fill="#fdf3e4" stroke="#f0d9b5"/><text x="927" y="130" fill="#b45309">M2-M 手写识别</text>
+</g>
+<g font-size="11.5" fill="#1b1f23">
+<line x1="180" y1="150" x2="180" y2="212" stroke="#8c959f" stroke-dasharray="3 3"/><circle cx="180" cy="150" r="4" fill="#1b1f23"/>
+<text x="120" y="228">① Canvas planner/items</text><text x="120" y="243" fill="#5a636c">= 统一待办流（L1 主数据源）</text>
+<line x1="470" y1="150" x2="470" y2="86" stroke="#8c959f" stroke-dasharray="3 3"/><circle cx="470" cy="150" r="4" fill="#1b1f23"/>
+<text x="398" y="72" fill="#5a636c">= LTI 1.1 链 + ?dep= 深链</text><text x="398" y="57">② Cengage/WebAssign 链路</text>
+<line x1="700" y1="150" x2="700" y2="212" stroke="#8c959f" stroke-dasharray="3 3"/><circle cx="700" cy="150" r="4" fill="#1b1f23"/>
+<text x="640" y="228">③ WebAssign 答案 = MathML</text><text x="640" y="243" fill="#5a636c">RA_* 字段 + 页面自带填写接口</text>
+<line x1="1040" y1="150" x2="1040" y2="86" stroke="#8c959f" stroke-dasharray="3 3"/><circle cx="1040" cy="150" r="4" fill="#1b1f23"/>
+<text x="905" y="57">④ Gemini vs Pix2Text 实测</text><text x="905" y="72" fill="#5a636c">7 页手写，Gemini 决定性胜出</text>
+<line x1="880" y1="150" x2="880" y2="196" stroke="#8c959f" stroke-dasharray="3 3"/><circle cx="880" cy="150" r="4" fill="#1b1f23"/>
+<text x="828" y="212" fill="#5a636c">会话寿命探针</text>
+</g>
+</svg>
+</div>
+
+<h2>3 · Git 分支图</h2>
+<p><span class="tag m">■ 主会话</span> <span class="tag s">■ 子代理（worktree）</span> — 三个特性分支都由子代理在独立 worktree 中完成后合并回 master，worktree 现已删除。</p>
+<div class="scroll">
+<svg viewBox="0 0 1160 740" width="100%" style="min-width:720px" role="img" aria-label="git 分支拓扑">
+<style>
+.h{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;fill:#0a58ca}
+.h.sb{fill:#b45309}
+.s{font-size:12.5px;fill:#1b1f23}.g{font-size:11.5px;fill:#8c959f}
+.br{font-size:11px;fill:#b45309;font-style:italic}
+</style>
+<line x1="40" y1="24" x2="40" y2="716" stroke="#0a58ca" stroke-width="2"/>
+<path d="M40 216 C 40 232, 90 232, 90 248 L90 280 C90 296, 40 296, 40 312" fill="none" stroke="#b45309" stroke-width="2"/>
+<path d="M40 376 C 40 392, 90 392, 90 408 C90 424, 40 424, 40 440" fill="none" stroke="#b45309" stroke-width="2"/>
+<path d="M40 536 C 40 552, 90 552, 90 568 C90 584, 40 584, 40 600" fill="none" stroke="#b45309" stroke-width="2"/>
+<g>
+<circle cx="40" cy="24" r="6" fill="#0a58ca"/><text class="h" x="112" y="28">0fe7cf0</text><text class="s" x="190" y="28">mathinput: 单一可信读者（Gemini）+ split_problems</text><text class="g" x="700" y="28">master · 09-19 · HEAD</text>
+<circle cx="40" cy="56" r="6" fill="#0a58ca"/><text class="h" x="112" y="60">aa33748</text><text class="s" x="190" y="60">research: Gemini Flash-Lite vs Pix2Text，7 页手写对照</text><text class="g" x="700" y="60">master · 09-19</text>
+<circle cx="40" cy="88" r="6" fill="#0a58ca"/><text class="h" x="112" y="92">8a119e2</text><text class="s" x="190" y="92">mathinput: 缺 key 的报错更清楚（Windows 环境变量提示）</text><text class="g" x="700" y="92">master · 09-19</text>
+<circle cx="40" cy="120" r="6" fill="#0a58ca"/><text class="h" x="112" y="124">fbb1713</text><text class="s" x="190" y="124">scripts: session_monitor 会话寿命探针</text><text class="g" x="700" y="124">master · 09-18</text>
+<circle cx="40" cy="152" r="6" fill="#0a58ca"/><text class="h" x="112" y="156">8eabadc</text><text class="s" x="190" y="156">research: 本地 Pix2Text/pix2tex 试跑</text><text class="g" x="700" y="156">master · 09-17</text>
+<circle cx="40" cy="184" r="6" fill="#0a58ca"/><text class="h" x="112" y="188">c7abe2f</text><text class="s" x="190" y="188">docs: 公式 OCR vs VLM 科普页</text><text class="g" x="700" y="188">master · 09-17</text>
+<circle cx="40" cy="216" r="7" fill="#fff" stroke="#0a58ca" stroke-width="2.5"/><text class="h" x="112" y="220">c5c1995</text><text class="s" x="190" y="220">Merge branch 'm2m-01b'</text><text class="g" x="700" y="220">master · 09-17 · merge</text>
+<circle cx="90" cy="248" r="6" fill="#b45309"/><text class="h sb" x="112" y="252">e66cd9c</text><text class="s" x="190" y="252">docs: eval-set-howto 压到 15 行</text><text class="br" x="700" y="252">m2m-01b · 子代理</text>
+<circle cx="90" cy="280" r="6" fill="#b45309"/><text class="h sb" x="112" y="284">85bd8e0</text><text class="s" x="190" y="284">mathinput: 可插拔视觉提供商 + 共识管线 + 评测工具</text><text class="br" x="700" y="284">m2m-01b · 子代理</text>
+<circle cx="40" cy="312" r="6" fill="#0a58ca"/><text class="h" x="112" y="316">fba59c8</text><text class="s" x="190" y="316">docs: 手写 OCR 提供商调研报告</text><text class="g" x="700" y="316">master · 09-17</text>
+<circle cx="40" cy="344" r="6" fill="#0a58ca"/><text class="h" x="112" y="348">2dc95d0</text><text class="s" x="190" y="348">docs: 任务书 M2-M-01b</text><text class="g" x="700" y="348">master · 09-17</text>
+<circle cx="40" cy="376" r="7" fill="#fff" stroke="#0a58ca" stroke-width="2.5"/><text class="h" x="112" y="380">4923e8b</text><text class="s" x="190" y="380">Merge branch 'm2m-01'</text><text class="g" x="700" y="380">master · 09-17 · merge</text>
+<circle cx="90" cy="408" r="6" fill="#b45309"/><text class="h sb" x="112" y="412">5d5159a</text><text class="s" x="190" y="412">mathinput: LaTeX → WebAssign 方言 MathML + 视觉桩</text><text class="br" x="700" y="412">m2m-01 · 子代理</text>
+<circle cx="40" cy="440" r="6" fill="#0a58ca"/><text class="h" x="112" y="444">a28b075</text><text class="s" x="190" y="444">bot: 回执换行转义修正（二次）</text><text class="g" x="700" y="444">master · 09-17</text>
+<circle cx="40" cy="472" r="6" fill="#0a58ca"/><text class="h" x="112" y="476">66bfbf5</text><text class="s" x="190" y="476">bot: 回执换行转义修正</text><text class="g" x="700" y="476">master · 09-17</text>
+<circle cx="40" cy="504" r="6" fill="#0a58ca"/><text class="h" x="112" y="508">495198f</text><text class="s" x="190" y="508">bot: 回执列出下一步；已交条目移出菜单</text><text class="g" x="700" y="508">master · 09-17</text>
+<circle cx="40" cy="536" r="7" fill="#fff" stroke="#0a58ca" stroke-width="2.5"/><text class="h" x="112" y="540">3a8c102</text><text class="s" x="190" y="540">Merge branch 'm2a-02'</text><text class="g" x="700" y="540">master · 09-17 · merge</text>
+<circle cx="90" cy="568" r="6" fill="#b45309"/><text class="h sb" x="112" y="572">cc1184c</text><text class="s" x="190" y="572">bot: 多文件排队，一次 POST 带全部 file_ids</text><text class="br" x="700" y="572">m2a-02 · 子代理</text>
+<circle cx="40" cy="600" r="6" fill="#0a58ca"/><text class="h" x="112" y="604">4ef835e</text><text class="s" x="190" y="604">docs: 任务书 M2-A-02</text><text class="g" x="700" y="604">master · 09-17</text>
+<circle cx="40" cy="632" r="6" fill="#0a58ca"/><text class="h" x="112" y="636">27a6a92</text><text class="s" x="190" y="636">bot: /todo 按课分块，条目编码 A1/B2</text><text class="g" x="700" y="636">master · 09-17</text>
+<circle cx="40" cy="664" r="6" fill="#0a58ca"/><text class="h" x="112" y="668">49e2761</text><text class="s" x="190" y="668">bot: /todo 只看今天→+4 天，外部条目按课分组</text><text class="g" x="700" y="668">master · 09-17</text>
+<circle cx="40" cy="696" r="6" fill="#0a58ca"/><text class="h" x="112" y="700">e82355b</text><text class="s" x="190" y="700">ainl: M1 上线（Canvas→Telegram 早报）+ bot + 记录器 + 逆向文档</text><text class="g" x="700" y="700">master · 09-17 · root</text>
+</g>
+</svg>
+</div>
+
+<h2>4 · 提交清单</h2>
+<table>
+<thead><tr><th>hash</th><th>日期</th><th>分支</th><th>作者</th><th>做了什么</th><th>关键文件</th></tr></thead>
+<tbody>
+<tr><td class="n mono">0fe7cf0</td><td class="n">09-19</td><td class="n">master</td><td class="n">主会话</td><td>按 09-19 实测结果改为单一可信读者（Gemini），新增 split_problems 按题切分</td><td class="mono">mathinput/pipeline.py</td></tr>
+<tr><td class="n mono">aa33748</td><td class="n">09-19</td><td class="n">master</td><td class="n">主会话</td><td>Gemini Flash-Lite vs Pix2Text 同 7 页对照实测报告 + 原始输出</td><td class="mono">docs/research/gemini-vs-pix2text-2026-09-19.md, gemini-pages/*.txt</td></tr>
+<tr><td class="n mono">8a119e2</td><td class="n">09-19</td><td class="n">master</td><td class="n">主会话</td><td>缺 API key 时错误信息不再重复，给出 Windows 环境变量设置提示</td><td class="mono">mathinput/__main__.py</td></tr>
+<tr><td class="n mono">fbb1713</td><td class="n">09-18</td><td class="n">master</td><td class="n">主会话</td><td>会话寿命探针：frozen / rotating 两个客户端并行探测 Canvas cookie 老化</td><td class="mono">scripts/session_monitor.py</td></tr>
+<tr><td class="n mono">8eabadc</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>本地 Pix2Text / pix2tex 在 7 页手写上的试跑与失败模式归类</td><td class="mono">docs/research/local-ocr-trial-2026-09-17.md, scripts/ocr_trial.py</td></tr>
+<tr><td class="n mono">c7abe2f</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>科普页：公式 OCR 与 VLM 的区别，给项目主看</td><td class="mono">docs/explainers/formula-ocr-vs-vlm.html</td></tr>
+<tr><td class="n mono">c5c1995</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>合并 m2m-01b</td><td>—</td></tr>
+<tr><td class="n mono">e66cd9c</td><td class="n">09-17</td><td class="n">m2m-01b</td><td class="n"><span class="tag s">子代理</span></td><td>评测集操作手册压缩到 15 行</td><td class="mono">docs/tasks/eval-set-howto.md</td></tr>
+<tr><td class="n mono">85bd8e0</td><td class="n">09-17</td><td class="n">m2m-01b</td><td class="n"><span class="tag s">子代理</span></td><td>providers 包（Claude/Gemini/Qwen/Mathpix）、共识管线、<span class="mono">--eval</span> 评测器；+39 测试</td><td class="mono">mathinput/providers/*, pipeline.py, evaluate.py, prompts.py</td></tr>
+<tr><td class="n mono">fba59c8</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>手写 OCR 全提供商成本/精度调研（含 FERMAT 过度纠正证据）</td><td class="mono">docs/research/handwriting-ocr-options-2026-09.md</td></tr>
+<tr><td class="n mono">2dc95d0</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>写 M2-M-01b 自包含任务书，供子代理独立执行</td><td class="mono">docs/tasks/m2m-01b-vision-providers.md</td></tr>
+<tr><td class="n mono">4923e8b</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>合并 m2m-01</td><td>—</td></tr>
+<tr><td class="n mono">5d5159a</td><td class="n">09-17</td><td class="n">m2m-01</td><td class="n"><span class="tag s">子代理</span></td><td>新包 mathinput：LaTeX→WIRIS 方言 MathML，4 个黄金用例逐字节通过；视觉桩</td><td class="mono">mathinput/latex_to_mathml.py, vision.py, tests/test_mathinput.py</td></tr>
+<tr><td class="n mono">a28b075</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>回执换行转义彻底修好</td><td class="mono">bot/conversation.py</td></tr>
+<tr><td class="n mono">66bfbf5</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>回执换行转义修正（第一次，未修净）</td><td class="mono">bot/conversation.py</td></tr>
+<tr><td class="n mono">495198f</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>提交回执列出接下来要做什么；已提交条目自动移出待办菜单</td><td class="mono">bot/conversation.py, tests/test_bot.py</td></tr>
+<tr><td class="n mono">3a8c102</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>合并 m2a-02</td><td>—</td></tr>
+<tr><td class="n mono">cc1184c</td><td class="n">09-17</td><td class="n">m2a-02</td><td class="n"><span class="tag s">子代理</span></td><td>草稿改为文件队列，一次 POST 带全部 file_ids；照片编号 photo-1..N；+5 测试</td><td class="mono">bot/conversation.py, bot/state.py, canvas/api.py</td></tr>
+<tr><td class="n mono">4ef835e</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>写 M2-A-02 任务书（含 5 张照片只收到 1 个附件的真实事故复盘）</td><td class="mono">docs/tasks/m2a-02-multifile-upload.md</td></tr>
+<tr><td class="n mono">27a6a92</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>/todo 改成每课一块（A/B/C…），条目编码 A1/B2，逐条给「在这交」或链接</td><td class="mono">bot/conversation.py, bot/state.py</td></tr>
+<tr><td class="n mono">49e2761</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>/todo 只显示今天→+4 天，外部条目按课分组，不再截断</td><td class="mono">bot/conversation.py, tests/test_bot.py</td></tr>
+<tr><td class="n mono">e82355b</td><td class="n">09-17</td><td class="n">master</td><td class="n">主会话</td><td>项目根提交：M1 早报上线、M2-A bot、Tampermonkey 记录器、全部逆向文档与架构</td><td class="mono">ARCHITECTURE.md, ONBOARDING.md, src/ainl/**, recorder/, docs/*.md</td></tr>
+</tbody>
+</table>
+
+<h2>5 · 八层架构现状</h2>
+<table>
+<thead><tr><th>层</th><th>做什么</th><th>状态</th><th>代码 / 文档</th></tr></thead>
+<tbody>
+<tr><td class="n"><b>L0</b> 采集</td><td>Canvas REST + GraphQL 双通道；Bearer token 或浏览器 cookie 会话（SSO+Duo 人工登录一次，storage_state 复用，cookie 轮换回写）</td><td class="n">✅ 已完成</td><td class="mono">canvas/api.py · auth.py · session.py · _http.py · docs/canvas-api-map.md</td></tr>
+<tr><td class="n"><b>L1</b> 规范</td><td>把 REST/GraphQL 拍平成统一对象，<span class="mono">canonical_url</span> 直接取 planner 的 <span class="mono">html_url</span></td><td class="n">✅ 已完成</td><td class="mono">canvas/models.py · canvas/source.py</td></tr>
+<tr><td class="n"><b>L2</b> 路由</td><td>每门课「东西到底在哪」的 YAML 映射表（syllabus + 教授访谈产物）</td><td class="n">⬜ 未开始</td><td class="mono">research/professor-interview.md（仅素材）</td></tr>
+<tr><td class="n"><b>L3</b> 知识</td><td>PPT/PDF 入库切块检索 = 每科私教；需自建 local Bot API server 破 50 MB 上限</td><td class="n">⬜ 未开始</td><td>—</td></tr>
+<tr><td class="n"><b>L4</b> 规划</td><td>LLM 把大作业拆成多天子任务，写入 task 表</td><td class="n">⬜ 未开始</td><td>—</td></tr>
+<tr><td class="n"><b>L5</b> 调度</td><td>08:00 早报、死线升级、变更侦测；APScheduler 持久 job store</td><td class="n">✅ 已完成</td><td class="mono">brief/compose.py · brief/__main__.py</td></tr>
+<tr><td class="n"><b>L6</b> 对话</td><td>Telegram 单 bot 长轮询；/todo 菜单、草稿状态机、文件队列、回执</td><td class="n">✅ 已完成</td><td class="mono">bot/conversation.py · bot/state.py · telegram/client.py</td></tr>
+<tr><td class="n"><b>L7-A</b> Canvas 代交</td><td>官方三步上传：pending → inst-fs → submissions，一次可带多个 file_id</td><td class="n">✅ 已完成</td><td class="mono">canvas/api.py（submit_files） · docs/canvas-submit-protocol.md</td></tr>
+<tr><td class="n"><b>L7-B</b> 厂商代交</td><td>WebAssign / McGraw Hill 代交计分测评</td><td class="n">⬜ 刻意不做</td><td>见第 9 节「边界与原则」</td></tr>
+<tr><td class="n"><b>L7-C</b> 深链直达</td><td>改 <span class="mono">target=_self</span> 提交 Canvas LTI 表单，直落 <span class="mono">?dep=</span> 那一页</td><td class="n">⬜ 未开始</td><td class="mono">docs/cengage-webassign-api.md §1、§6 · external/webassign.py（骨架）</td></tr>
+<tr><td class="n" colspan="4" style="background:var(--soft)">旁支：<span class="mono">mathinput/</span>（手写→LaTeX→MathML，🚧 转换与识别已完成，填回页面未做）· <span class="mono">recorder/</span>（Tampermonkey 点击路径记录器，✅ 证据采集完成）</td></tr>
+</tbody>
+</table>
+
+<h2>6 · 逆向发现</h2>
+<table>
+<thead><tr><th>对象</th><th>发现</th><th>为什么重要</th></tr></thead>
+<tbody>
+<tr><td class="n">Canvas <span class="mono">/api/v1/planner/items</span></td><td>一条混合流同时返回 assignment / announcement / quiz / discussion，<span class="mono">html_url</span> 已是规范 URL，<span class="mono">submissions.missing/late</span> 由服务端算好</td><td>L1 的主数据源；不用再拼 URL、跟重定向；公告和作业同流＝替代「老师在群里说一句」</td></tr>
+<tr><td class="n">Canvas GraphQL <span class="mono">GetUserCourseWork</span></td><td>Dashboard 的 Course work 面板；<span class="mono">includeOverdue:true</span> 拿过期未交，<span class="mono">assignment.quiz/discussion</span> 非空即真身是 quiz/discussion</td><td>L5 最该提醒的「已过期」只有这里拿得到；另有 <span class="mono">GetUserCourseStatistics</span> 一条查询拿全部课计数</td></tr>
+<tr><td class="n">Canvas 文件提交</td><td>三步：<span class="mono">POST /files/pending</span> → inst-fs（JWT 分钟级有效）→ <span class="mono">POST …/submissions</span> 带 <span class="mono">file_ids[]</span>。官方 REST 等价路径用 Bearer，无需 CSRF</td><td>L7-A 的全部实现；一次 submissions 可带多个 file_id ＝ 多文件提交的依据</td></tr>
+<tr><td class="n">Cengage LTI 1.1</td><td><span class="mono">gateway.cengage.com/rest/launchBasicLTI/…/activityId/&lt;ID&gt;</span> → student.cengage → webassign；<span class="mono">activityId</span> 是 Canvas↔WebAssign 稳定映射键；每作业规范 URL ＝ <span class="mono">/web/Student/Assignment-Responses/last?dep=&lt;dep&gt;</span></td><td>L7-C 深链的落点；付费墙状态可由落地域名判定（<span class="mono">payment_required</span> vs <span class="mono">ok</span>）</td></tr>
+<tr><td class="n">McGraw Hill LTI 1.3</td><td><span class="mono">sso.router…/loginInitiation</span> → <span class="mono">/ltiv1p3</span> → <span class="mono">window.open</span> 命名空白弹窗 → form-post → ezto → connect，共约 10 跳，终点 <span class="mono">/student/todo</span></td><td>依赖两层弹窗，任何内嵌浏览器都走不完（见踩坑 b）</td></tr>
+<tr><td class="n">WebAssign 答案编码</td><td>每答题部件一对隐藏字段 <span class="mono">RA_&lt;qid&gt;_&lt;qIdx&gt;_&lt;part&gt;_&lt;respId&gt;</span> + <span class="mono">enabled_RA_…</span>，值是 <b>WIRIS 方言 MathML</b>：固定开头 <span class="mono">&lt;mspace/&gt;</span>、函数名用 <span class="mono">&lt;mi&gt;sin&lt;/mi&gt;</span>、括号用 <span class="mono">&lt;mfenced&gt;</span>（函数后带 <span class="mono">separators=""</span>）、小数拆成 <span class="mono">&lt;mn&gt;0&lt;/mn&gt;&lt;mo&gt;.&lt;/mo&gt;&lt;mn&gt;5&lt;/mn&gt;</span>、π 用 <span class="mono">&amp;#x3C0;</span></td><td>手写识别的目标格式；<span class="mono">latex_to_webassign_mathml</span> 就是照这张表归一的</td></tr>
+<tr><td class="n">WebAssign 填写接口</td><td>页面自带 <span class="mono">setMathTypeValue(type, mathml, cb)</span> → <span class="mono">mathTypeOverlay.syncAnswerValue(boxId)</span>；题目对象 <span class="mono">$('question&lt;qid&gt;_&lt;i&gt;').retrieve('question')</span> 有 <span class="mono">save()</span>（不消耗次数）与 <span class="mono">submit(true)</span>（消耗）。每 part 20 次提交机会</td><td><b>不需要 MITM、不需要伪造 POST</b>：调页面自己的 JS 填入 + save，Submit 留给学生按</td></tr>
+</tbody>
+</table>
+
+<h2>7 · 测量结果</h2>
+<h3>7.1 Gemini Flash-Lite vs Pix2Text（同 7 页平板手写，2026-09-19）</h3>
+<table>
+<thead><tr><th>页</th><th>内容</th><th>Pix2Text</th><th>Gemini Flash-Lite</th><th>备注</th></tr></thead>
+<tbody>
+<tr><td class="n">196</td><td>级数</td><td class="n">~45%</td><td class="n"><b>~85%</b></td><td>唯一明显出错的一页（最乱、含中文批注与方框）</td></tr>
+<tr><td class="n">197</td><td>比较判别</td><td class="n">~60%</td><td class="n"><b>~97%</b></td><td>第 3 题 Pix2Text 整条丢失</td></tr>
+<tr><td class="n">198</td><td>积分判别</td><td class="n">~65%</td><td class="n"><b>~95%</b></td><td>Apple Pencil 弹窗遮挡处仍还原</td></tr>
+<tr><td class="n">199</td><td>积分判别（另版）</td><td class="n">~65%</td><td class="n"><b>~97%</b></td><td></td></tr>
+<tr><td class="n">200</td><td>比值 / 根值</td><td class="n">~75%</td><td class="n"><b>~98%</b></td><td>五题全对，无幻觉</td></tr>
+<tr><td class="n">201</td><td>根值</td><td class="n">~55%</td><td class="n"><b>~95%</b></td><td>嵌套指数 <span class="mono">(n/(n+1))^{n^2}</span> 正确</td></tr>
+<tr><td class="n">202</td><td>交错级数</td><td class="n">~70% 数学 / 0% 中文</td><td class="n"><b>~95% / 中文可读</b></td><td></td></tr>
+</tbody>
+</table>
+<p style="font-size:13.5px;color:var(--dim)">单页耗时：Gemini 3–5 s（含网络）；Pix2Text 在 RTX 4060 上 7–15 s。Gemini 未做任何预处理（<b>没有反色</b>）。
+Pix2Text 的四类系统性错误（Σ/lim 上的 ∞ 读成 <span class="mono">N n v t φ ψ</span>、叠层上标坍塌、结论词 diverge→<span class="mono">\dim</span>、多行块幻觉）Gemini 全部没有。</p>
+<div class="box good"><b>关键验证：它没有替学生改对。</b>200 页第 5 题学生按比值判别算出 <span class="mono">⅓e≈0.906&lt;1</span> 应为收敛，手写结论却写了 <span class="mono">diverge</span>；Gemini <b>原样转写</b>。这正是 FERMAT 研究（arXiv 2604.22774）报告的 42–66% 过度纠正行为，被提示词里「transcribe verbatim, do not simplify or correct」挡住——整条管线可用的前提，现在有真实证据。</div>
+
+<h3>7.2 成本（每 1000 张 1000×1000 图，2026-09-17 官方价，实时非批量）</h3>
+<table>
+<thead><tr><th>选项</th><th>$/1k</th><th>手写数学证据</th><th>备注</th></tr></thead>
+<tbody>
+<tr><td class="n">Qwen3-VL-Flash</td><td class="n"><b>0.08</b></td><td>Qwen2.5-VL-72B 在 FERMAT 排第 2；Flash 规模未知</td><td>最便宜；新加坡端点，开户摩擦</td></tr>
+<tr><td class="n">Gemini 3.1 Flash-Lite</td><td class="n"><b>0.35</b></td><td>Gemini 2.5 Flash 在 FERMAT 15 个 VLM 中第 1（PINK 0.935）</td><td>2027-05-07 停用；<b>本项目实测选中</b></td></tr>
+<tr><td class="n">OpenAI gpt-5.4-nano / gpt-4.1-mini</td><td class="n">0.30 / 0.74</td><td>无手写证据；4o-mini 血统在 FERMAT 居中</td><td></td></tr>
+<tr><td class="n">Claude Haiku 4.5</td><td class="n">1.54</td><td>未知</td><td>同厂，Sonnet 的一半</td></tr>
+<tr><td class="n">Mathpix Convert</td><td class="n">2.00</td><td>专用手写数学 OCR，无公开数字</td><td>直接返回 MathML，省掉转换步骤</td></tr>
+<tr><td class="n">Claude Sonnet 5（原基线）</td><td class="n">3.07</td><td>项目内证据良好</td><td>留作升级档</td></tr>
+<tr><td class="n">gpt-4o-mini（high detail）</td><td class="n">3.85</td><td>—</td><td><b>陷阱</b>：tile 计价让它贵过 Sonnet</td></tr>
+<tr><td class="n">本地 Pix2Text / UniMERNet</td><td class="n">0.00</td><td>实测见 7.1，明显不够</td><td>省钱但要自己养精度</td></tr>
+</tbody>
+</table>
+<p style="font-size:13.5px;color:var(--dim)">原计划「两个便宜模型并行 → 一致则采用 → 不一致升级 Sonnet」（25% 升级率约 $1.20/1k）。09-19 实测后改为 <b>单一可信读者（Gemini）</b>——见提交 <span class="mono">0fe7cf0</span>。1 人 10 张/天 ＝ 每月 $0.36 级别，绝对金额在单人规模下可忽略；共识机制的价值主要在 50 人规模与质量兜底。</p>
+
+<h3>7.3 Canvas 会话寿命探针（2026-09-18）</h3>
+<table>
+<thead><tr><th>探针</th><th>结果</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td class="n">frozen（永不接受 Set-Cookie）</td><td>10.3 小时后仍然有效</td><td>一份「冻结」的 cookie 副本可以长时间继续用，会话不是按请求绑定的</td></tr>
+<tr><td class="n">rotating（吸收每个 Set-Cookie）</td><td><span class="mono">canvas_session</span> <b>每个请求都被重签</b></td><td>轮换极其频繁，所以「不回写」这件事很容易被忽略</td></tr>
+<tr><td class="n">真实运行</td><td>约 13 小时后会话死亡</td><td>根因是轮换后的 cookie 没有持久化（见踩坑 h），不是 Canvas 主动过期</td></tr>
+</tbody>
+</table>
+
+<h2>8 · 踩过的坑</h2>
+<div class="pit"><b>(a) Chrome 138+ 不开「Allow User Scripts」，Tampermonkey 静默不运行</b>
+<div><span>现象</span>记录器装好了、图标也在，但一条事件都不记，无任何报错</div>
+<div><span>根因</span>Chrome 138 起扩展的用户脚本 API 需在扩展详情页单独打开「允许用户脚本」开关，未开时脚本注入被静默丢弃</div>
+<div><span>怎么防</span>装完立刻用菜单里的 <b>stats</b> 命令验证计数非零，把「计数 &gt; 0」当作安装成功的唯一判据</div></div>
+
+<div class="pit"><b>(b) Chrome 弹窗拦截静默吃掉 McGraw Hill 的 LTI 启动，界面却说成功了</b>
+<div><span>现象</span>Canvas 点作业「跳转两次然后就没了」，页面没有任何错误提示</div>
+<div><span>根因</span>MH 的 LTI 1.3 链依赖两层 <span class="mono">window.open</span> 命名弹窗；被拦截后 form-post 落到一个不存在的窗口，<span class="mono">connect.mheducation.com</span> 在 3,864 个请求里一次都没出现（交互日志里 6 次 <span class="mono">about:blank</span> 就是被吞的弹窗）</div>
+<div><span>怎么防</span>判断成功与否只看<b>最终落地域名</b>（应到 <span class="mono">/student/todo</span>），不看 UI；对该站点为域名放行弹窗</div></div>
+
+<div class="pit"><b>(c) Anything Analyzer 的内嵌浏览器引导不起 Cengage 的 SPA（webpack 代码块 404）</b>
+<div><span>现象</span>对 <span class="mono">gateway.cengage.com</span> 零 POST——LTI 启动表单从未提交；只有 3 个 <span class="mono">*.app.bundle.js</span> 的 404，然后 302 弹回 Canvas</div>
+<div><span>根因</span>webpack 5 <span class="mono">publicPath:'auto'</span> 靠 <span class="mono">document.currentScript.src</span> 推算资源根路径；内嵌浏览器的脚本注入层让 <span class="mono">currentScript</span> 不可用 → 回退到 <span class="mono">/</span> → 实际部署在 <span class="mono">/frontend/</span> → 404 → 启动脚本从未执行</div>
+<div><span>怎么防</span>换版本、清缓存都没用——问题在 JS 运行时环境不在网络层。<b>内嵌浏览器不是这活儿的工具</b>，用真实 Chrome。（同时作废了早前「analyzer 破坏 OAuth 签名」的结论）</div></div>
+
+<div class="pit"><b>(d) Google 禁止在内嵌 WebView 里登录</b>
+<div><span>现象</span>ESL116 的 Google Docs 模板作业三次都落到 <span class="mono">accounts.google.com/v3/signin/rejected</span></div>
+<div><span>根因</span>Google 自 2016 年起明确拦截内嵌 WebView 的登录（"This browser or app may not be secure"），指纹怎么伪装都过不去</div>
+<div><span>怎么防</span>凡涉及 Google 登录的链路一律走真实浏览器，不要浪费时间调指纹</div></div>
+
+<div class="pit"><b>(e) 子代理在 worktree 里跑 <span class="mono">pip install -e</span> 会把可编辑安装指过去</b>
+<div><span>现象</span>子代理任务完成、worktree 删掉之后，主仓库的 <span class="mono">python -m ainl…</span> 找不到模块或跑的是旧代码</div>
+<div><span>根因</span>可编辑安装记录的是<b>路径</b>；在 worktree 里重装会把这条路径改到临时目录，worktree 一删就悬空</div>
+<div><span>怎么防</span>任务书里写死「<b>不要运行 pip install</b>」，测试靠 <span class="mono">pyproject.toml</span> 的 <span class="mono">pythonpath=["src"]</span> 直接跑 <span class="mono">python -m pytest -q</span>——这条已写进两份任务书的硬性约束</div></div>
+
+<div class="pit"><b>(f) Windows <span class="mono">SetEnvironmentVariable(…,'User')</span> 只影响<b>新开</b>的终端</b>
+<div><span>现象</span>设好了 API key，当前窗口里程序仍报「缺少 key」</div>
+<div><span>根因</span>用户级环境变量写进注册表，已存在的进程不会重读</div>
+<div><span>怎么防</span>设完开新窗口；CLI 的缺 key 报错里直接带上这句提示（提交 <span class="mono">8a119e2</span> 就是干这个的）</div></div>
+
+<div class="pit"><b>(g) Telegram 409 ＝ 两个 bot 实例共用一个 token</b>
+<div><span>现象</span>getUpdates 持续返回 409 Conflict，消息时有时无</div>
+<div><span>根因</span>同一 token 只允许一个长轮询消费者；调试时旧进程没退干净，或早报进程与 bot 进程同时在拉</div>
+<div><span>怎么防</span>启动前确认没有同名进程残留；409 直接当作「有另一个我在跑」来排查，不要往网络问题上想</div></div>
+
+<div class="pit"><b>(h) Canvas 会话约 13 小时后死亡——因为轮换后的 cookie 没落盘</b>
+<div><span>现象</span>早上还好好的，晚上早报任务开始 401 并要求重新登录</div>
+<div><span>根因</span><span class="mono">canvas_session</span> 每个请求都被重签，而进程退出时没有把新值写回 <span class="mono">storage_state.json</span>，下次启动用的是越来越旧的那份（探针显示冻结副本本身能撑 10.3 h）</div>
+<div><span>怎么防</span><span class="mono">ApiSource.close()</span> 把 httpx cookie jar 的轮换值合并回 storage_state（<span class="mono">canvas/session.py</span> 的 <span class="mono">save_cookies</span>，已有回归测试 <span class="mono">test_save_cookies_persists_rotated_session</span>）</div></div>
+
+<h2>9 · 边界与原则</h2>
+<div class="box">
+<b>① 代理只搬运学生自己做出来的东西，绝不生产或提交学生没做过的作业。</b><br>
+L3 可以讲解、出练习、主动问你哪里没懂，但不替你写计分作业的答案；L7 不提交你没做过的东西。
+对 WebAssign / McGraw Hill 这类<b>计分测评一律不代交</b>（L7-B 刻意不做）——手写识别管线到 <span class="mono">save()</span>（Save Progress，不消耗次数）为止，
+渲染结果截图回 Telegram 给学生确认，<b>Submit 那一下永远由学生自己按</b>。这条线一旦破了，这个项目就不可能交给学校。
+</div>
+<div class="box">
+<b>② 凭证不进聊天，只走环境变量与本机文件。</b><br>
+不收集、不传输、不存储 NetID / 密码——UW 用 SSO + Duo，光有密码也登不进去；真出事责任落到个人头上。
+所有 key 只从环境变量读（<span class="mono">ANTHROPIC_API_KEY</span> / <span class="mono">GEMINI_API_KEY</span> / <span class="mono">DASHSCOPE_API_KEY</span> / <span class="mono">MATHPIX_*</span> / <span class="mono">TELEGRAM_BOT_TOKEN</span>），
+缺 key 在<b>构造时</b>抛 <span class="mono">ProviderNotConfigured</span> 而不是 import 时；配置对象用 <span class="mono">repr=False</span>，日志和探针只记名字、长度与短哈希，永不记值。
+浏览器会话 <span class="mono">storage_state.json</span> 按密码对待，只留在 <span class="mono">~/.ainl/</span>。记录器只记 URL / 按钮文字 / 域名跳转 / 文件名，<b>不记答案、成绩、表单值</b>，且完全不联网。
+</div>
+
+<h2>10 · 下一步</h2>
+<table>
+<thead><tr><th>项</th><th>内容</th><th>卡在哪</th></tr></thead>
+<tbody>
+<tr><td class="n"><b>M2-M-02</b></td><td>把识别出的 MathML 填回 WebAssign：Playwright 持久 profile 打开 <span class="mono">?dep=</span> 页 → 对每个 part 调页面自带的 <span class="mono">setMathTypeValue</span> + <span class="mono">syncAnswerValue</span> → <span class="mono">q.save()</span> → 截图回 Telegram → <b>学生自己按 Submit</b></td><td>接口已全部逆向出来，不需要 MITM；每 part 20 次机会给了容错余量。属于纯实现工作</td></tr>
+<tr><td class="n"><b>M2-C</b></td><td>一键深链直达：改 <span class="mono">target=_self</span> 提交 Canvas 的 LTI 表单（保签名、绕弹窗），直落作业页</td><td>需要一个<b>公网 HTTPS 端点</b>（Cloudflare Tunnel 是这个规模下的正解）</td></tr>
+<tr><td class="n"><b>部署</b></td><td>搬到 Mac mini 常驻：登录态不能上云，APScheduler 的 job store 落 SQLite 以便重启不丢；L3 还需自建 local Bot API server 破 50 MB 上传上限</td><td>硬件已有，纯运维</td></tr>
+<tr><td class="n"><b>OAuth / 多用户</b></td><td>向 UW 申请 developer key，走 <span class="mono">/login/oauth2/auth</span>，用 Telegram 的 <span class="mono">state</span> 带 user_id 自动认回</td><td>政策问题不是技术问题；一旦持有他人凭证，就必须加密存储 + <span class="mono">/disconnect</span> 可撤销 + 隐私声明 + 可审计出口日志——「数据从不离开你的设备」这个论据届时失效</td></tr>
+</tbody>
+</table>
+
+<footer>生成于 2026-09-19 · 数据来源：git 历史（22 提交）、ARCHITECTURE.md / ONBOARDING.md、docs/ 下的逆向与调研文档、src/ainl/ 源码。离线自包含，无外部资源。</footer>
+</div></body></html>

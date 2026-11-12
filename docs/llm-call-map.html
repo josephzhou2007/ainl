@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM 调用地图</title>
+<style>
+:root{
+  --bg:#fbfaf8;
+  --surface:#ffffff;
+  --surface-alt:#f4f2ee;
+  --border:#e2ddd4;
+  --border-strong:#cfc8bb;
+  --text:#22201d;
+  --text-dim:#6b6558;
+  --accent:#b8562f;
+  --accent-soft:#fbeee8;
+  --zero:#3f7a55;
+  --zero-soft:#eaf4ee;
+  --warn:#8a6a1f;
+  --warn-soft:#fbf3de;
+  --code-bg:#f2efe9;
+  --shadow:0 1px 2px rgba(34,32,29,.06),0 8px 24px rgba(34,32,29,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16151a;
+    --surface:#1e1d23;
+    --surface-alt:#26242b;
+    --border:#33313a;
+    --border-strong:#474450;
+    --text:#ece9e4;
+    --text-dim:#a29d95;
+    --accent:#ff8f5e;
+    --accent-soft:#3a251c;
+    --zero:#6fc490;
+    --zero-soft:#1d2e24;
+    --warn:#e0bb63;
+    --warn-soft:#332c18;
+    --code-bg:#26242b;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16151a;
+  --surface:#1e1d23;
+  --surface-alt:#26242b;
+  --border:#33313a;
+  --border-strong:#474450;
+  --text:#ece9e4;
+  --text-dim:#a29d95;
+  --accent:#ff8f5e;
+  --accent-soft:#3a251c;
+  --zero:#6fc490;
+  --zero-soft:#1d2e24;
+  --warn:#e0bb63;
+  --warn-soft:#332c18;
+  --code-bg:#26242b;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;
+  line-height:1.75;
+  overflow-x:hidden;
+}
+.wrap{max-width:900px;margin:0 auto;padding:48px 16px 96px}
+
+code,.mono{
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  font-size:.86em;
+}
+code{background:var(--code-bg);padding:.12em .38em;border-radius:4px;word-break:break-word}
+
+h1{font-size:clamp(28px,6vw,40px);line-height:1.2;letter-spacing:-.02em;margin:0 0 .5em}
+h2{
+  font-size:clamp(20px,4.4vw,25px);line-height:1.3;letter-spacing:-.01em;
+  margin:72px 0 4px;padding-top:28px;border-top:1px solid var(--border);
+}
+h2 .num{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:.5em;font-size:.8em}
+h3{font-size:17px;margin:36px 0 10px;color:var(--text)}
+p{margin:0 0 16px}
+.sub{color:var(--text-dim);font-size:15px;margin:0 0 28px}
+.lead{font-size:clamp(17px,3.4vw,19px);line-height:1.7}
+
+.headline{
+  background:var(--accent-soft);
+  border:1px solid var(--accent);
+  border-left-width:4px;
+  border-radius:10px;
+  padding:20px 22px;
+  margin:28px 0 8px;
+}
+.headline strong{color:var(--accent)}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:20px 22px;
+  margin:24px 0;
+  box-shadow:var(--shadow);
+}
+.note{
+  background:var(--warn-soft);
+  border:1px solid var(--border);
+  border-left:4px solid var(--warn);
+  border-radius:8px;
+  padding:14px 18px;
+  margin:20px 0;
+  font-size:15px;
+}
+.note b{color:var(--warn)}
+
+.figure{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:14px 10px 6px;
+  margin:28px 0 12px;
+  box-shadow:var(--shadow);
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.figure svg{display:block;min-width:600px;width:100%;height:auto}
+.figure.narrow svg{min-width:520px}
+.cap{color:var(--text-dim);font-size:13.5px;margin:0 0 24px;padding:0 4px}
+.scrollhint{
+  display:none;color:var(--text-dim);font-size:12.5px;padding:0 4px 8px;
+}
+@media (max-width:720px){.scrollhint{display:block}}
+
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:22px 0 10px;
+  border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14.5px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+thead th{
+  background:var(--surface-alt);font-size:13px;font-weight:650;color:var(--text-dim);
+  letter-spacing:.02em;white-space:nowrap;position:sticky;top:0;
+}
+tbody tr:last-child td{border-bottom:none}
+td.n{white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums}
+.pill{
+  display:inline-block;padding:1px 9px;border-radius:999px;font-size:12.5px;
+  font-weight:650;line-height:1.7;white-space:nowrap;
+}
+.pill.zero{background:var(--zero-soft);color:var(--zero);border:1px solid var(--zero)}
+.pill.one{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+tr.hot td{background:var(--accent-soft)}
+tr.hot td:first-child{font-weight:650}
+
+ul,ol{margin:0 0 16px;padding-left:1.4em}
+li{margin:0 0 8px}
+.tight li{margin:0 0 4px}
+
+dl.steps{margin:20px 0 0;padding:0}
+dl.steps > div{
+  display:grid;grid-template-columns:34px 1fr;gap:0 14px;
+  padding:0 0 20px;position:relative;
+}
+dl.steps > div:not(:last-child)::before{
+  content:"";position:absolute;left:16px;top:30px;bottom:0;width:2px;background:var(--border-strong);
+}
+dl.steps dt{
+  grid-column:1;width:34px;height:34px;border-radius:50%;
+  background:var(--surface-alt);border:1px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:var(--text-dim);z-index:1;
+}
+dl.steps dd{grid-column:2;margin:0;padding-top:3px}
+dl.steps dd b{display:block;font-size:16px;margin-bottom:2px}
+dl.steps dd span{color:var(--text-dim);font-size:14.5px}
+
+.est{
+  font-size:12px;font-weight:650;color:var(--warn);background:var(--warn-soft);
+  border:1px solid var(--warn);border-radius:4px;padding:0 6px;white-space:nowrap;
+}
+
+.kpi{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:24px 0}
+.kpi > div{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:16px 18px;box-shadow:var(--shadow);
+}
+.kpi .v{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums}
+.kpi .k{color:var(--text-dim);font-size:13px;margin-top:4px}
+.kpi .v.acc{color:var(--accent)}
+
+.sizegrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin:20px 0}
+.sizegrid > div{
+  border:1px solid var(--border);border-radius:10px;padding:13px 15px;background:var(--surface);
+}
+.sizegrid > div.reach{border-color:var(--accent);background:var(--accent-soft)}
+.sizegrid .mod{font-weight:650;font-size:15px}
+.sizegrid .ln{font-variant-numeric:tabular-nums;color:var(--text-dim);font-size:13.5px}
+.sizegrid .det{font-size:12.5px;color:var(--text-dim);margin-top:5px;line-height:1.55}
+.sizegrid > div.reach .mod,.sizegrid > div.reach .ln{color:var(--accent)}
+
+footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--border);
+  color:var(--text-dim);font-size:13.5px}
+
+svg text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+svg .lbl{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+</style>
+</head>
+<body><div data-stale-note style="margin:0;padding:12px 16px;background:#7a4b00;color:#fff;font:14px/1.5 system-ui,sans-serif;border-bottom:2px solid #ffb84d">⚠️ 快照：2026-09-19。核心结论仍成立——整个系统只有一个 LLM 调用点（手写答案纸）。但入口已从 /math 改为 /todo + 编号，选择题改为按钮点选（0 次调用），文中的行号已过期。耗时实测见 docs/timing-analysis.md。</div>
+<div class="wrap">
+
+<h1>LLM 调用地图</h1>
+<p class="sub">AI-native-learning · 每条 Telegram 指令跑哪段代码、多少行、花多少 token</p>
+
+<div class="headline">
+  <p class="lead" style="margin:0">
+    整个系统约 <strong>6,025 行 Python</strong>，只有 <strong>一个</strong> 代码路径会调用 LLM：
+    <code>/math</code> 流程里学生拍答题纸那一步，落到
+    <code>bot/conversation.py:175</code>。
+    Canvas、每日简报、作业提交、WebAssign 填答与提交 —— 全部是纯 REST / GraphQL / 浏览器操作，
+    <strong>零 LLM 调用</strong>。
+  </p>
+</div>
+<p class="cap">换句话说：要压 LLM 成本，只有一个地方值得看，其余代码再怎么跑都不产生 token 费用。</p>
+
+<div class="kpi">
+  <div><div class="v acc">1</div><div class="k">全系统 LLM 调用点</div></div>
+  <div><div class="v">0</div><div class="k">其余 17 条输入路径的调用数</div></div>
+  <div><div class="v">1,322</div><div class="k">能触达 LLM 的代码行（mathinput/）</div></div>
+  <div><div class="v">~1,600</div><div class="k">每页 token（1.3k 入 + 300 出）</div></div>
+</div>
+
+<!-- ===================== 1 ===================== -->
+<h2><span class="num">01</span>入口与分发</h2>
+<p>所有输入都从同一个地方进来：<code>bot/__main__.py:40</code> 的 <code>tg.get_updates</code>（30 秒 long poll），
+交给 <code>bot/conversation.py:64</code> 的 <code>handle</code> 分发。
+下面两节把 <code>handle</code> 之后的每条分支都摊开。</p>
+
+<!-- ===================== 2 ===================== -->
+<h2><span class="num">02</span>/math 全流程（唯一含 LLM 的路径）</h2>
+<p>下图是 <code>/math</code> 从指令到提交的完整链路。每个节点右上角标了它自己的 LLM 调用数。
+只有橙色那一个节点是 <b>1</b>，其余全是 <b>0</b>。</p>
+
+<p class="scrollhint">← 图较宽，可左右滑动 →</p>
+<div class="figure">
+<svg viewBox="0 0 760 900" xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="/math 流程图：只有拍照转写一步调用 LLM">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--border-strong)"/>
+    </marker>
+    <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+  <style>
+    .bx{fill:var(--surface);stroke:var(--border-strong);stroke-width:1.5;rx:9}
+    .bxz{fill:var(--zero-soft);stroke:var(--zero);stroke-width:1.5;rx:9}
+    .bxh{fill:var(--accent-soft);stroke:var(--accent);stroke-width:3;rx:11}
+    .t{fill:var(--text);font-size:13.5px}
+    .tb{fill:var(--text);font-size:15px;font-weight:700}
+    .td{fill:var(--text-dim);font-size:11.5px}
+    .ta{fill:var(--accent);font-size:13px;font-weight:700}
+    .tah{fill:var(--accent);font-size:19px;font-weight:700}
+    .tz{fill:var(--zero);font-size:12px;font-weight:700}
+    .ln{stroke:var(--border-strong);stroke-width:1.6;fill:none}
+    .lnA{stroke:var(--accent);stroke-width:2.4;fill:none}
+  </style>
+
+  <!-- 1 /math -->
+  <rect class="bxz" x="230" y="14" width="300" height="56"/>
+  <text class="tb" x="248" y="38">/math</text>
+  <text class="td" x="248" y="56">_math:122 → WebAssign.assignments webassign.py:186</text>
+  <text class="tz" x="510" y="38" text-anchor="end">0 次</text>
+  <path class="ln" d="M380,70 L380,98" marker-end="url(#ar)"/>
+
+  <!-- 2 pick -->
+  <rect class="bxz" x="230" y="100" width="300" height="56"/>
+  <text class="tb" x="248" y="124">选作业  m:&lt;dep&gt;</text>
+  <text class="td" x="248" y="142">_math_open:136 → WebAssign.questions :195</text>
+  <text class="tz" x="510" y="124" text-anchor="end">0 次</text>
+  <path class="ln" d="M380,156 L380,184" marker-end="url(#ar)"/>
+
+  <!-- 3 push -->
+  <rect class="bxz" x="230" y="186" width="300" height="56"/>
+  <text class="tb" x="248" y="210">题目以截图推送</text>
+  <text class="td" x="248" y="228">每题 1 张 screenshot + 1 次 sendPhoto</text>
+  <text class="tz" x="510" y="210" text-anchor="end">0 次</text>
+  <path class="ln" d="M380,242 L380,270" marker-end="url(#ar)"/>
+
+  <!-- 4 student photo -->
+  <rect class="bxz" x="230" y="272" width="300" height="56"/>
+  <text class="tb" x="248" y="296">学生拍下编号答题纸</text>
+  <text class="td" x="248" y="314">_math_photo:166 → tg.download（2 次 HTTP）</text>
+  <text class="tz" x="510" y="296" text-anchor="end">0 次</text>
+  <path class="lnA" d="M380,328 L380,356" marker-end="url(#arA)"/>
+
+  <!-- 5 LLM -->
+  <rect class="bxh" x="150" y="358" width="460" height="92"/>
+  <text class="tah" x="176" y="388">唯一的 LLM 调用</text>
+  <text class="t" x="176" y="410">self.transcribe → pipeline.transcribe_with_consensus</text>
+  <text class="td" x="176" y="428">conversation.py:175 · pipeline.py:212 · gemini-flash-lite</text>
+  <text class="td" x="176" y="444">图片以 base64 inline_data 原尺寸上传，从不缩放</text>
+  <rect x="512" y="374" width="80" height="34" rx="8" fill="var(--accent)"/>
+  <text x="552" y="397" text-anchor="middle" font-size="17px" font-weight="700" fill="var(--surface)">1 次</text>
+  <text class="ta" x="552" y="440" text-anchor="middle">升级时 2 次</text>
+  <path class="lnA" d="M380,450 L380,478" marker-end="url(#arA)"/>
+
+  <!-- 6 parse -->
+  <rect class="bxz" x="230" y="480" width="300" height="56"/>
+  <text class="tb" x="248" y="504">本地解析 / 按题号切分</text>
+  <text class="td" x="248" y="522">latex_to_mathml.py（纯本地，301 行）</text>
+  <text class="tz" x="510" y="504" text-anchor="end">0 次</text>
+  <path class="ln" d="M380,536 L380,564" marker-end="url(#ar)"/>
+
+  <!-- 7 preview -->
+  <rect class="bxz" x="230" y="566" width="300" height="56"/>
+  <text class="tb" x="248" y="590">预览给学生确认</text>
+  <text class="td" x="248" y="608">学生的确认就是质量闸门</text>
+  <text class="tz" x="510" y="590" text-anchor="end">0 次</text>
+
+  <!-- fan out -->
+  <path class="ln" d="M380,622 L380,644" />
+  <path class="ln" d="M130,644 L630,644" />
+  <path class="ln" d="M130,644 L130,676" marker-end="url(#ar)"/>
+  <path class="ln" d="M380,644 L380,676" marker-end="url(#ar)"/>
+  <path class="ln" d="M630,644 L630,676" marker-end="url(#ar)"/>
+
+  <!-- fill -->
+  <rect class="bxz" x="20" y="678" width="220" height="70"/>
+  <text class="tb" x="36" y="702">Fill  mfill</text>
+  <text class="td" x="36" y="720">_math_fill:222 → WebAssign.fill</text>
+  <text class="td" x="36" y="736">webassign.py:208（浏览器）</text>
+  <text class="tz" x="224" y="702" text-anchor="end">0 次</text>
+
+  <!-- modify -->
+  <rect class="bxz" x="270" y="678" width="220" height="70"/>
+  <text class="tb" x="286" y="702">Modify  mmodify</text>
+  <text class="td" x="286" y="720">_math_modify / _math_ask_fix</text>
+  <text class="td" x="286" y="736">mfix:n，改动本地套用</text>
+  <text class="tz" x="474" y="702" text-anchor="end">0 次</text>
+
+  <!-- cancel -->
+  <rect class="bxz" x="520" y="678" width="220" height="70"/>
+  <text class="tb" x="536" y="702">Cancel</text>
+  <text class="td" x="536" y="720">_command:113</text>
+  <text class="td" x="536" y="736">清掉 pending/draft/math</text>
+  <text class="tz" x="724" y="702" text-anchor="end">0 次</text>
+
+  <path class="ln" d="M130,748 L130,786" marker-end="url(#ar)"/>
+  <rect class="bxz" x="20" y="788" width="220" height="56"/>
+  <text class="tb" x="36" y="812">Submit  msubmit</text>
+  <text class="td" x="36" y="830">逐题点 SUBMIT ANSWER</text>
+  <text class="tz" x="224" y="812" text-anchor="end">0 次</text>
+
+  <!-- modify detail -->
+  <path class="ln" d="M380,748 L380,786" marker-end="url(#ar)"/>
+  <rect x="262" y="788" width="236" height="76" rx="9" fill="var(--surface-alt)" stroke="var(--border-strong)" stroke-width="1.5"/>
+  <text class="t" x="278" y="810" font-weight="700">改正方式决定成本</text>
+  <text class="tz" x="278" y="830">打字改 → 0 次调用</text>
+  <text class="ta" x="278" y="850">再拍一张答案照 → 1 次调用</text>
+</svg>
+</div>
+<p class="cap">图 1 · <code>/math</code> 端到端。橙色节点是全系统唯一的 LLM 调用点；它之后的解析、填答、提交全在本地和浏览器里完成。</p>
+
+<div class="note">
+  <b>Modify 分支的实际意义：</b>Gemini 读错时，用<b>打字</b>修正是完全免费的（<code>_math_modify</code> / <code>_math_ask_fix</code> 只在本地套用改动）；
+  只有重新<b>拍一张</b>答案照片才会再走一次 <code>_math_photo:166</code>，多付一次调用。
+</div>
+
+<!-- ===================== 3 ===================== -->
+<h2><span class="num">03</span>所有输入路径一览</h2>
+<p>从 <code>handle</code> 出发的每一条分支、它跑的代码、它碰的外部服务、以及它的 LLM 调用数。
+只有加粗那一行不是 0。</p>
+
+<div class="scrollhint">← 表格较宽，可左右滑动 →</div>
+<div class="tablewrap">
+<table>
+<thead><tr><th>输入</th><th>处理函数</th><th>外部服务</th><th>LLM</th></tr></thead>
+<tbody>
+<tr><td><code>/start</code>, <code>/help</code></td><td><code>_command:105</code> → <code>_send(HELP)</code></td><td>仅 Telegram，1 次 HTTP</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td><code>/todo</code></td><td><code>_todo</code> conversation.py:324 → <code>ApiSource.planner</code> api.py:170（<code>GET /api/v1/planner/items</code>，分页）+ <code>assignments_index</code> api.py:250（每门课一次分页 GET）</td><td>Canvas REST</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td><code>/cancel</code></td><td><code>_command:113</code>，清 pending / draft / math</td><td>Telegram</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td><code>/channel</code></td><td><code>_channel:271</code> → <code>channel.preference()</code> channel.py:28（读 <code>~/.ainl/channel.json</code>）</td><td>本地磁盘</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td><code>/channel &lt;arg&gt;</code></td><td><code>channel.set_preference</code> channel.py:36 → <code>channel.open_source</code> channel.py:43</td><td>本地磁盘；可能拉起 Playwright 登录</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td><code>/math</code></td><td><code>_math:122</code> → <code>WebAssign.assignments</code> webassign.py:186 → CDP 连 <code>127.0.0.1:9222</code></td><td>WebAssign 浏览器</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td>课程代号（如 <code>C2</code>）</td><td><code>_incoming_text:389</code> → <code>_open:425</code> → <code>assignment_detail</code> api.py:268，最多 5 个文件，每个 2 次 GET + 1 次 sendDocument</td><td>Canvas REST</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td>纯文本 / URL</td><td><code>_incoming_text:401</code>，构造 Draft</td><td>Telegram</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr class="hot"><td>照片（math 阶段）</td><td><code>_math_photo:166</code> → <code>tg.download</code>（2 次 HTTP）→ <code>self.transcribe</code> <b>conversation.py:175</b></td><td><b>Gemini</b></td><td class="n"><span class="pill one">1</span><br><span style="font-size:12px;color:var(--accent)">升级则 2</span></td></tr>
+<tr><td>照片（其他场合）</td><td><code>_incoming_file:470</code>，字节排队等 Canvas 上传</td><td>Telegram</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td>回调 <code>m:&lt;dep&gt;</code></td><td><code>_math_open:136</code> → <code>WebAssign.questions</code> webassign.py:195，每题 1 张 screenshot + 1 次 sendPhoto</td><td>WebAssign + Telegram</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td>回调 <code>mfill</code></td><td><code>_math_fill:222</code> → <code>latex_to_webassign_mathml</code>（本地）→ <code>WebAssign.fill</code> webassign.py:208</td><td>WebAssign</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td>回调 <code>msubmit</code></td><td><code>_math_submit</code> → <code>WebAssign.submit</code>，逐题点 SUBMIT ANSWER</td><td>WebAssign</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td>回调 <code>mmodify</code> / <code>mfix:n</code></td><td><code>_math_modify</code> / <code>_math_ask_fix</code>，打字的修正在本地套用</td><td>Telegram</td><td class="n"><span class="pill zero">0</span></td></tr>
+<tr><td>回调 <code>submit</code>（Canvas）</td><td><code>submit_files</code> api.py:337（每文件 2–3 次 HTTP + 1 次 POST）/ <code>submit_text</code> / <code>submit_url</code> / <code>post_discussion_entry</code></td><td>Canvas REST</td><td class="n"><span class="pill zero">0</span></td></tr>
+</tbody>
+</table>
+</div>
+<p class="cap">表 1 · 17 条路径，16 条是 0。日常用得最多的 <code>/todo</code> 和 Canvas 提交完全不花 token。</p>
+
+<!-- ===================== 4 ===================== -->
+<h2><span class="num">04</span>唯一调用点的细节与升级判定</h2>
+
+<div class="card">
+<h3 style="margin-top:0">调用链</h3>
+<ul class="tight">
+  <li><code>conversation.py:175</code> → <code>pipeline.transcribe_with_consensus</code> <code>pipeline.py:212</code></li>
+  <li>默认便宜档 <code>DEFAULT_CHEAP = ("gemini-flash-lite",)</code> <code>pipeline.py:28</code>（只有一家）</li>
+  <li><code>providers/gemini.py:30</code> <code>GeminiProvider.transcribe</code>，模型 <code>gemini-3.1-flash-lite</code>（gemini.py:16）</li>
+  <li>端点 <code>https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent</code>（gemini.py:17）</li>
+  <li>参数 <code>temperature: 0</code>、<code>maxOutputTokens: 512</code>（gemini.py:47）</li>
+  <li>图片以 base64 <code>inline_data</code> 发送（gemini.py:38-41），<b>代码里任何地方都没有缩放</b></li>
+  <li>提示词：<code>SYSTEM_PROMPT</code> <code>prompts.py:284</code> 共 573 字符；带 hint 的 user turn 238 字符</li>
+</ul>
+</div>
+
+<h3>升级到第二次调用的判定</h3>
+<p>第二次调用（<code>claude-sonnet-5</code>，<code>pipeline.py:29</code>）<b>只在下面四种情况之一</b>发生。
+判定条件是 <code>_parses()</code> <code>pipeline.py:170-178</code> 加上 accept 分支 <code>pipeline.py:248-256</code>。</p>
+
+<div class="figure narrow">
+<svg viewBox="0 0 700 430" xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="升级判定菱形：Gemini 读数能否通过 _parses">
+  <style>
+    .d1{fill:var(--text);font-size:13.5px}
+    .d2{fill:var(--text-dim);font-size:11.5px}
+    .dz{fill:var(--zero);font-size:13px;font-weight:700}
+    .da{fill:var(--accent);font-size:13px;font-weight:700}
+  </style>
+  <rect x="230" y="10" width="240" height="46" rx="9" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+  <text class="d1" x="350" y="32" text-anchor="middle" font-weight="700">第 1 次调用：Gemini 返回 latex</text>
+  <text class="d2" x="350" y="48" text-anchor="middle">已经付掉的 1 次</text>
+  <path d="M350,56 L350,84" stroke="var(--border-strong)" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+
+  <!-- diamond -->
+  <path d="M350,88 L560,180 L350,272 L140,180 Z" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="2"/>
+  <text class="d1" x="350" y="152" text-anchor="middle" font-weight="700">_parses(latex) ?</text>
+  <text class="d2" x="350" y="172" text-anchor="middle">latex 非空 且 不含 \? 且</text>
+  <text class="d2" x="350" y="188" text-anchor="middle">latex_to_webassign_mathml() 不抛异常</text>
+  <text class="d2" x="350" y="208" text-anchor="middle">（HTTP 报错 → latex 为 None，同样算失败）</text>
+
+  <!-- yes -->
+  <path d="M560,180 L630,180 L630,300 L520,300" stroke="var(--zero)" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <text class="dz" x="596" y="172" text-anchor="middle">通过</text>
+  <rect x="380" y="276" width="140" height="48" rx="9" fill="var(--zero-soft)" stroke="var(--zero)" stroke-width="2"/>
+  <text class="d1" x="450" y="298" text-anchor="middle" font-weight="700">接受读数</text>
+  <text class="dz" x="450" y="315" text-anchor="middle">总计 1 次调用</text>
+
+  <!-- no -->
+  <path d="M140,180 L70,180 L70,300 L180,300" stroke="var(--accent)" stroke-width="2" fill="none" marker-end="url(#arA)"/>
+  <text class="da" x="104" y="172" text-anchor="middle">不通过</text>
+  <rect x="180" y="276" width="160" height="48" rx="9" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+  <text class="d1" x="260" y="298" text-anchor="middle" font-weight="700">升级 claude-sonnet-5</text>
+  <text class="da" x="260" y="315" text-anchor="middle">总计 2 次调用</text>
+
+  <text class="d2" x="350" y="368" text-anchor="middle">默认只配一家便宜档，所以「两家不一致」这条路径不会触发；</text>
+  <text class="d2" x="350" y="386" text-anchor="middle">单一读数只要能解析就直接接受 —— 真正的质量闸门是学生的确认。</text>
+  <text class="d2" x="350" y="410" text-anchor="middle">pipeline.py:170-178 · pipeline.py:248-256</text>
+</svg>
+</div>
+<p class="cap">图 2 · 升级判定。它看的不是「答案对不对」，而是「这串 LaTeX 能不能转成 MathML」。</p>
+
+<!-- ===================== 5 ===================== -->
+<h2><span class="num">05</span>Token 与成本</h2>
+
+<div class="kpi">
+  <div><div class="v">~1,300</div><div class="k">输入 token / 页（实测）</div></div>
+  <div><div class="v">~300</div><div class="k">输出 token / 页（实测）</div></div>
+  <div><div class="v">3–5 s</div><div class="k">每页耗时（实测）</div></div>
+  <div><div class="v acc">$0.35</div><div class="k">每 1000 页（代码常量）</div></div>
+</div>
+<p class="cap">实测来源：<code>docs/research/gemini-vs-pix2text-2026-09-19.md:67-69</code>。单价来自 <code>gemini.py:23</code> 的 <code>cost_per_1k = 0.35</code>。</p>
+
+<p>一学期按 <b>300 页</b>算，研究文档给出的估算是 <b>≈ $0.14</b>（<span class="est">估算</span>，该文档按 $0.45/1000 页算；
+用代码里现在的 <code>cost_per_1k = 0.35</code> 重算约为 <b>$0.11</b>）。
+两个数都在同一量级：<b>一学期的手写识别成本是一位数角</b>。</p>
+
+<div class="scrollhint">← 可左右滑动 →</div>
+<div class="tablewrap">
+<table>
+<thead><tr><th>provider</th><th>cost_per_1k</th><th>代码位置</th><th>默认是否使用</th></tr></thead>
+<tbody>
+<tr class="hot"><td><code>gemini-flash-lite</code></td><td class="n">0.35</td><td><code>gemini.py:23</code></td><td><b>是 —— 唯一默认档</b></td></tr>
+<tr><td><code>claude-sonnet-5</code></td><td class="n">3.07</td><td><code>anthropic.py:75</code></td><td>仅升级时（约 9 倍）</td></tr>
+<tr><td><code>qwen-vl-flash</code></td><td class="n">0.08</td><td><code>qwen.py:24</code></td><td>已注册，默认不用</td></tr>
+<tr><td><code>claude-haiku-4-5</code></td><td class="n">1.54</td><td><code>anthropic.py:81</code></td><td>已注册，默认不用</td></tr>
+<tr><td><code>mathpix</code></td><td class="n">2.00</td><td><code>mathpix.py:28</code></td><td>已注册，默认不用</td></tr>
+</tbody>
+</table>
+</div>
+<p class="cap">表 2 · registry 里注册的所有 provider。默认路径只走第一行。</p>
+
+<h3>最大的一个 token 杠杆：<code>media_resolution</code></h3>
+<p>依据 <code>docs/research/handwriting-ocr-options-2026-09.md:16-25</code>：
+Gemini 3.x 按 <code>media_resolution</code> 对图片计费 ——
+<b>low = 280</b> image token，<b>medium = 560</b>，<b>high（默认）= 1120</b>。</p>
+<p><b>代码从来没有设置过 <code>media_resolution</code>，也从来没有压缩过照片</b>，
+所以每一页都在按默认的 1120 付费。在约 1,300 的输入 token 里，图片本身就占了 1120 ——
+提示词（573 + 238 字符）只是零头。这是目前唯一能明显砍掉输入 token 的开关。</p>
+
+<div class="note">
+  <b>诚实的警告：</b>那份 ~95% 的准确率<b>是在默认的 high 分辨率下测出来的</b>。
+  调到 medium 或 low <b>没有被测过</b>。手写数学对细节敏感，如果降分辨率导致读错率上升，
+  多出来的重拍、打字修正和升级到 <code>claude-sonnet-5</code>（贵 9 倍）的次数，
+  很可能比省下的 token 更贵。要动这个开关，应该先在自己的答题纸上做一次 A/B 实测。
+</div>
+
+<!-- ===================== 6 ===================== -->
+<h2><span class="num">06</span>Gemini 对象的生命周期</h2>
+<p>没有常驻客户端、没有连接池、没有 SDK 对象。一次调用从建到灭，全在一个函数栈里。</p>
+
+<dl class="steps">
+  <div><dt>1</dt><dd><b>读 key</b><span><code>gemini.py:28</code>，在 <code>__init__</code> 里读环境变量 <code>GEMINI_API_KEY</code>（<code>gemini.py:15</code>）。
+  <b>不是</b>在 import 时读 —— 没配 key 也不影响其他功能启动。</span></dd></div>
+
+  <div><dt>2</dt><dd><b>每次调用现造 provider</b><span><code>pipeline._load</code> <code>pipeline.py:184-191</code> → <code>registry.get</code> <code>registry.py:25</code>。
+  provider 实例不复用。</span></dd></div>
+
+  <div><dt>3</dt><dd><b>一次 HTTP POST</b><span><code>base.http_post</code> <code>base.py:88-95</code>，直接调 <code>httpx.post</code>，超时 60 秒，<b>无重试</b>。</span></dd></div>
+
+  <div><dt>4</dt><dd><b>立刻结束</b><span><code>httpx.post</code> 是模块级便捷函数，它内部开一个一次性 client，返回时就关掉。
+  没有持久 client、没有连接池、没有 SDK 对象、没有 <code>close()</code>。
+  <code>transcribe_with_consensus</code> 返回后 provider 对象被垃圾回收。</span></dd></div>
+
+  <div><dt>5</dt><dd><b>没有真实计量</b><span>代码<b>从不读取</b> Gemini 返回里的 <code>usageMetadata</code>，
+  所以 <code>result.cost_usd</code> 是一个<span class="est">按次估算</span>的固定值，<b>不是真实账单</b>。
+  要知道实际花了多少，得去 Google 控制台看，或者改代码把 <code>usageMetadata</code> 记下来。</span></dd></div>
+</dl>
+
+<!-- ===================== 7 ===================== -->
+<h2><span class="num">07</span>代码规模：哪些行能触达 LLM</h2>
+<p><code>src/ainl</code> 共 <b>3,373 行</b>；加上 <code>scripts/</code> 968 行与 <code>canvas-official/</code> 698 行，
+全项目约 <b>6,025 行 Python</b>（<code>wc -l</code>）。
+橙色的两块是唯一可能走到 LLM 的代码 —— 合计 <b>1,322 行</b>，约占全项目 <b>22%</b>，
+而且必须经由 <code>bot/conversation.py:175</code> 这一个入口。</p>
+
+<div class="sizegrid">
+  <div class="reach">
+    <div class="mod">mathinput/ <span class="ln">906</span></div>
+    <div class="det">latex_to_mathml.py 301 · pipeline.py 268 · evaluate.py 133 · __main__.py 100 · vision.py 53 · prompts.py 35 · __init__.py 16</div>
+  </div>
+  <div class="reach">
+    <div class="mod">mathinput/providers/ <span class="ln">416</span></div>
+    <div class="det">base.py 95 · anthropic.py 82 · mathpix.py 64 · gemini.py 57 · qwen.py 56 · registry.py 40 · __init__.py 22</div>
+  </div>
+  <div>
+    <div class="mod">canvas/ <span class="ln">1,228</span></div>
+    <div class="det">api.py 362 · session.py 243 · models.py 222 · _http.py 118 · __main__.py 93 · channel.py 67 · auth.py 59 · source.py 51 · __init__.py 13</div>
+  </div>
+  <div>
+    <div class="mod">bot/ <span class="ln">814</span></div>
+    <div class="det">conversation.py 620 · state.py 131 · __main__.py 59 · __init__.py 4 —— 只有其中第 175 行会触发 LLM</div>
+  </div>
+  <div>
+    <div class="mod">external/ <span class="ln">307</span></div>
+    <div class="det">webassign.py 248 · platforms.py 56</div>
+  </div>
+  <div>
+    <div class="mod">brief/ <span class="ln">299</span></div>
+    <div class="det">每日简报，纯 Canvas 数据</div>
+  </div>
+  <div>
+    <div class="mod">telegram/ <span class="ln">184</span></div>
+    <div class="det">client.py 137</div>
+  </div>
+  <div>
+    <div class="mod">util/ <span class="ln">75</span></div>
+    <div class="det">—</div>
+  </div>
+  <div>
+    <div class="mod">config.py <span class="ln">73</span></div>
+    <div class="det">根目录配置</div>
+  </div>
+  <div>
+    <div class="mod">scripts/ <span class="ln">968</span></div>
+    <div class="det">—</div>
+  </div>
+  <div>
+    <div class="mod">canvas-official/ <span class="ln">698</span></div>
+    <div class="det">—</div>
+  </div>
+</div>
+<p class="cap">表 3 · <code>wc -l</code> 行数。橙色 = 可触达 LLM。其余 4,703 行永远不产生 token 费用。</p>
+
+<h3>结论</h3>
+<ul>
+  <li>要降 LLM 成本，只需要盯 <code>mathinput/</code> 这 1,322 行，别的地方优化不产生任何节省。</li>
+  <li>当前单价已经很低（$0.35/1000 页，一学期约一两角）；<b>最大的浪费是图片按默认 high = 1120 image token 计费，且照片从不缩放</b>。</li>
+  <li>降 <code>media_resolution</code> 是唯一明确的杠杆，但准确率只在 high 下测过，先做 A/B 再动。</li>
+  <li>想要真实数字而不是估算，先把 Gemini 返回的 <code>usageMetadata</code> 记录下来。</li>
+</ul>
+
+<footer>
+  页面上的行数、行号、常量与端点均取自仓库代码；token 数、耗时与准确率取自
+  <code>docs/research/gemini-vs-pix2text-2026-09-19.md</code> 与
+  <code>docs/research/handwriting-ocr-options-2026-09.md</code>。
+  标注 <span class="est">估算</span> 的数字为推算而非实测。
+</footer>
+
+</div>
+</body>
+</html>

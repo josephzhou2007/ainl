@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Canvas login · Native Bot Learning</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --fg: var(--tg-theme-text-color, #111111);
+    --muted: var(--tg-theme-hint-color, #6b6b6b);
+    --accent: var(--tg-theme-button-color, #2481cc);
+    --accent-fg: var(--tg-theme-button-text-color, #ffffff);
+    --bar: var(--tg-theme-secondary-bg-color, #f1f1f4);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tg]) { --bg: #17181c; --fg: #ececec; --muted: #9a9aa2; --bar: #22242a; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 15px/1.35 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none; overflow: hidden; }
+  #bar { height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+    background: var(--bar); border-bottom: 1px solid rgba(127,127,127,.2); }
+  #where { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--muted); font-size: 13px; }
+  #where b { color: var(--fg); font-weight: 600; }
+  .btn { border: 0; background: transparent; color: var(--fg); font-size: 18px;
+    width: 36px; height: 36px; border-radius: 8px; }
+  .btn:active { background: rgba(127,127,127,.2); }
+  #screen { position: absolute; top: 44px; left: 0; right: 0; bottom: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; background: #fff; }
+  #kb { position: fixed; left: 0; top: 44px; width: 1px; height: 1px; opacity: 0;
+    font-size: 16px; /* under 16px iOS zooms the page on focus */ border: 0; padding: 0;
+    resize: none; }
+  #veil { position: absolute; inset: 44px 0 0 0; display: flex; align-items: center;
+    justify-content: center; padding: 24px; background: color-mix(in srgb, var(--bg) 92%, transparent); }
+  #veil[hidden] { display: none; }
+  .card { max-width: 340px; width: 100%; text-align: center; }
+  .card p { margin: 0 0 16px; }
+  .card .who { font-size: 20px; font-weight: 600; margin: 4px 0 18px; }
+  .primary, .secondary { display: block; width: 100%; padding: 12px; border-radius: 10px;
+    font-size: 16px; border: 0; margin-top: 8px; }
+  .primary { background: var(--accent); color: var(--accent-fg); }
+  .secondary { background: var(--bar); color: var(--fg); }
+  .note { color: var(--muted); font-size: 13px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <button class="btn" id="back" aria-label="Back">‹</button>
+  <div id="where">Canvas login</div>
+  <button class="btn" id="kbd" aria-label="Keyboard">⌨︎</button>
+  <button class="btn" id="close" aria-label="Close">✕</button>
+</div>
+<div id="screen"><canvas id="c"></canvas></div>
+<textarea id="kb" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+<div id="veil"><div class="card" id="card"><p>Connecting…</p></div></div>
+<script>
+(() => {
+  const tg = window.Telegram && Telegram.WebApp;
+  if (tg && tg.initData) {
+    document.documentElement.setAttribute('data-tg', '');
+    tg.ready(); tg.expand();
+    if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7')) tg.disableVerticalSwipes();
+  }
+  const $ = id => document.getElementById(id);
+  const c = $('c'), g = c.getContext('2d'), kb = $('kb'), veil = $('veil'), card = $('card');
+  let remote = { w: 0, h: 0 };          // the page's CSS size, from the frame metadata
+  let open = false;
+
+  function show(html) { card.innerHTML = html; veil.hidden = false; }
+  function hide() { veil.hidden = true; }
+  const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  function closeApp() { if (tg && tg.initData) tg.close(); else window.close(); }
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Next to this page, wherever it is mounted (/login or /native-bot-learning/login).
+  const base = location.pathname.replace(/\/(login\/?)?$/, '');
+  const ws = new WebSocket(proto + '//' + location.host + base + '/ws');
+  ws.binaryType = 'blob';
+  const send = o => { if (ws.readyState === 1) ws.send(JSON.stringify(o)); };
+
+  ws.onopen = () => {
+    const r = $('screen').getBoundingClientRect();
+    // "Open in my browser": the bot's button carries a ticket, never a URL.
+    const open = new URLSearchParams(location.search).get('open') || '';
+    send({ type: 'hello', initData: (tg && tg.initData) || '', open,
+           w: Math.round(r.width), h: Math.round(r.height), dpr: window.devicePixelRatio || 2 });
+  };
+
+  let drawing = false;
+  ws.onmessage = async (e) => {
+    if (typeof e.data !== 'string') {
+      if (drawing) return;                  // the next frame is on its way anyway
+      drawing = true;
+      try {
+        const bmp = await createImageBitmap(e.data);
+        if (c.width !== bmp.width || c.height !== bmp.height) { c.width = bmp.width; c.height = bmp.height; }
+        g.drawImage(bmp, 0, 0);
+        bmp.close && bmp.close();
+      } catch (_) {} finally { drawing = false; }
+      return;
+    }
+    const m = JSON.parse(e.data);
+    if (m.type === 'status') show('<p>' + esc(m.text) + '</p>');
+    else if (m.type === 'ready') { open = true; hide(); }
+    else if (m.type === 'meta') { remote = { w: m.w, h: m.h }; }
+    else if (m.type === 'url') $('where').innerHTML = '<b>' + esc(m.where.split('/')[0]) + '</b>' + esc(m.where.slice(m.where.indexOf('/')));
+    else if (m.type === 'focus') { if (!m.editable) kb.blur(); }
+    else if (m.type === 'blocked') flash('That link goes outside Canvas login (' + esc(m.host) + ') — not available here.');
+    else if (m.type === 'confirm') {
+      kb.blur();
+      show('<p>Canvas says you are</p><div class="who">' + esc(m.name) + '</div>' +
+           '<button class="primary" id="yes">Yes, that\'s me</button>' +
+           '<button class="secondary" id="no">No — log out</button>' +
+           '<p class="note">Only your own account can be connected.</p>');
+      $('yes').onclick = () => { show('<p>Saving…</p>'); send({ type: 'confirm', yes: true }); };
+      $('no').onclick = () => { hide(); send({ type: 'confirm', yes: false }); };
+    }
+    else if (m.type === 'done') {
+      show('<p>✅ Canvas connected' + (m.name ? ' as <b>' + esc(m.name) + '</b>' : '') + '.</p>' +
+           '<p class="note">You can close this. The bot will message you.</p>');
+      setTimeout(closeApp, 1800);
+    }
+    else if (m.type === 'error') show('<p>' + esc(m.text) + '</p><button class="secondary" id="x">Close</button>'), $('x').onclick = closeApp;
+    else if (m.type === 'bye') show('<p>' + esc(m.text) + '</p><button class="secondary" id="x">Close</button>'), $('x').onclick = closeApp;
+  };
+  ws.onclose = () => {
+    open = false;
+    if (veil.hidden) show('<p>Disconnected.</p><button class="secondary" id="x">Close</button>'), $('x').onclick = closeApp;
+  };
+
+  let flashTimer = 0;
+  function flash(html) {
+    show('<p>' + html + '</p>');
+    clearTimeout(flashTimer); flashTimer = setTimeout(hide, 2500);
+  }
+
+  // --- pointer: tap = click, drag = scroll -------------------------------
+  function toRemote(x, y) {
+    const r = c.getBoundingClientRect();
+    return { x: (x - r.left) / r.width * (remote.w || r.width),
+             y: (y - r.top) / r.height * (remote.h || r.height) };
+  }
+  let start = null, last = null, dragged = false;
+  c.addEventListener('pointerdown', (e) => {
+    start = last = { x: e.clientX, y: e.clientY }; dragged = false;
+    c.setPointerCapture(e.pointerId);
+  });
+  c.addEventListener('pointermove', (e) => {
+    if (!start) return;
+    const dx = e.clientX - last.x, dy = e.clientY - last.y;
+    if (!dragged && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 8) return;
+    dragged = true; last = { x: e.clientX, y: e.clientY };
+    const p = toRemote(e.clientX, e.clientY);
+    const r = c.getBoundingClientRect();
+    const k = (remote.w || r.width) / r.width;
+    send({ type: 'wheel', x: p.x, y: p.y, dx: -dx * k, dy: -dy * k });
+  });
+  c.addEventListener('pointerup', (e) => {
+    if (start && !dragged && open) {
+      // Focus inside the tap itself: iOS only raises the keyboard from a
+      // user gesture. The server says afterwards whether a field got focus.
+      kb.value = ' '; kb.focus({ preventScroll: true });
+      send({ type: 'tap', ...toRemote(e.clientX, e.clientY) });
+    }
+    start = null;
+  });
+  c.addEventListener('wheel', (e) => { const p = toRemote(e.clientX, e.clientY);
+    send({ type: 'wheel', x: p.x, y: p.y, dx: e.deltaX, dy: e.deltaY }); e.preventDefault(); }, { passive: false });
+
+  // --- keyboard: text through a hidden textarea --------------------------
+  // It always holds one space, so Backspace on an "empty" field still fires.
+  const KEYS = new Set(['Enter', 'Backspace', 'Tab', 'Escape', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
+  const reset = () => { kb.value = ' '; kb.setSelectionRange(1, 1); };
+  kb.addEventListener('keydown', (e) => {
+    if (e.isComposing || e.keyCode === 229) return;       // Android IME: handled on input
+    if (KEYS.has(e.key)) { send({ type: 'key', key: e.key }); e.preventDefault(); }
+  });
+  let composed = { text: '', at: 0 };
+  kb.addEventListener('input', (e) => {
+    if (e.isComposing) return;
+    const t = e.inputType || '';
+    // Some browsers repeat a finished composition as one more input event.
+    if (e.data && e.data === composed.text && Date.now() - composed.at < 100) { reset(); return; }
+    if (t === 'deleteContentBackward') send({ type: 'key', key: 'Backspace' });
+    else if (t === 'insertLineBreak' || t === 'insertParagraph') send({ type: 'key', key: 'Enter' });
+    else {
+      const text = e.data != null ? e.data : kb.value.slice(1);
+      if (text) send({ type: 'text', text });
+    }
+    reset();
+  });
+  kb.addEventListener('compositionend', (e) => {
+    if (e.data) { send({ type: 'text', text: e.data }); composed = { text: e.data, at: Date.now() }; }
+    reset();
+  });
+
+  $('kbd').onclick = () => { if (document.activeElement === kb) kb.blur(); else { reset(); kb.focus({ preventScroll: true }); } };
+  $('back').onclick = () => send({ type: 'back' });
+  $('close').onclick = closeApp;
+})();
+</script>
+</body>
+</html>

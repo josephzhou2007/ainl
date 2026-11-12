@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset='utf-8'><title>Problem Set 4 | Gradescope</title></head><body>
+<h1>Problem Set 4</h1><p>No submission yet. Due Oct 5 at 9:55am. Late submissions: not allowed.</p>
+<a href="/courses/9001/assignments/89/instructions.pdf">View Instructions</a>
+<footer><button onclick="document.getElementById('dlg').style.display='block'">Submit PDF</button>
+<button onclick="document.getElementById('imgs').style.display='block'">Submit Images</button></footer>
+<div id="imgs" style="display:none">Upload images: <input type="file" id="imgfile" accept="image/*" multiple> <button>Upload Images</button></div>
+<div id="dlg" role="dialog" aria-label="Submit Problem Set 4" style="display:none;border:2px solid #333;padding:12px">
+<h2>Submit Problem Set 4</h2><p>Upload a PDF of your work.</p>
+<label for="pdf" style="border:1px solid #333;padding:4px">Select PDF</label>
+<input type="file" id="pdf" accept="application/pdf" style="display:none"> <span id="chosen">No file selected</span>
+<button onclick="const f=document.getElementById('pdf').files[0]; if(!f){document.getElementById('chosen').textContent='Please select a file first';return;}
+location.href='/courses/9001/assignments/89/submissions/779?file='+encodeURIComponent(f.name)">Upload PDF</button>
+<button onclick="document.getElementById('dlg').style.display='none'">Cancel</button></div>
+<script>document.getElementById('pdf').addEventListener('change',e=>{document.getElementById('chosen').textContent=e.target.files[0].name})</script></body></html>

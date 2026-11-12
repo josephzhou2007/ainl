@@ -1,0 +1,2 @@
+# Additional dependency for this isolated prototype; ainl supplies Playwright.
+cryptography>=46,<51

@@ -1,0 +1,480 @@
+<!doctype html>
+<!--
+  The one-minute onboarding video, as a page: render.py seeks it frame by frame
+  (window.seek(t)) and ffmpeg joins the frames. Everything on screen is a pure
+  function of t, so a render is exact and repeatable.
+
+  The chat text is the bot's real wording (conversation.py, dispatch.py HELP);
+  the courses, titles and answers are made up — no real student's data.
+  Open it in a browser to scrub: ?t=23.5 shows that moment, ?play plays it.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ainl onboarding video</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@500;600&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg0: #0a1017; --bg1: #16222f;
+    --accent: #62b6f7; --accent2: #8ee3b5;
+    --text: #f4f7fa; --sub: #a3b4c6;
+    --chat: #0e1621; --head: #17212b;
+    --in: #182533; --out: #2b5278; --meta: #6d8193; --meta-out: #8bb1d8;
+    --link: #71baf2; --btn: #22313f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 540px; height: 960px; overflow: hidden; background: var(--bg0); }
+  body { font-family: Inter, -apple-system, "Helvetica Neue", sans-serif; color: var(--text);
+         -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; width: 540px; height: 960px; overflow: hidden;
+           background: radial-gradient(120% 70% at 50% 0%, #1c2d3f 0%, var(--bg0) 62%); }
+  #glow { position: absolute; width: 520px; height: 520px; border-radius: 50%; left: 10px; top: 380px;
+          background: radial-gradient(circle, rgba(98,182,247,.16), transparent 65%); }
+
+  /* ---------- captions ---------- */
+  .cap { position: absolute; left: 34px; right: 34px; top: 58px; opacity: 0; }
+  .cap h1 { font-size: 31px; line-height: 1.16; font-weight: 800; letter-spacing: -.02em; }
+  .cap h1 em { font-style: normal; color: var(--accent); }
+  .cap p { margin-top: 12px; font-size: 16.5px; line-height: 1.4; color: var(--sub); font-weight: 500; }
+  .cap p code, .cap h1 code { font-family: inherit; background: rgba(98,182,247,.16); color: var(--accent);
+          padding: 1px 8px; border-radius: 7px; }
+  .step { position: absolute; left: 34px; top: 30px; font-size: 12px; letter-spacing: .14em;
+          font-weight: 700; color: var(--accent); opacity: 0; text-transform: uppercase; }
+
+  /* ---------- the phone / chat ---------- */
+  #phone { position: absolute; left: 22px; right: 22px; top: 238px; height: 690px; border-radius: 30px;
+           background: var(--chat); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.55),
+           0 0 0 1px rgba(255,255,255,.07); transform-origin: 50% 40%; }
+  #head { position: absolute; left: 0; right: 0; top: 0; height: 60px; background: var(--head);
+          display: flex; align-items: center; gap: 12px; padding: 0 18px; z-index: 3;
+          border-bottom: 1px solid rgba(0,0,0,.35); }
+  #head .back { color: var(--link); font-size: 22px; margin-right: 2px; }
+  .ava { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-size: 19px;
+         background: linear-gradient(135deg, #62b6f7, #3b7fd1); }
+  #head .name { font-weight: 600; font-size: 15.5px; }
+  #head .status { font-size: 12.5px; color: var(--meta); margin-top: 1px; }
+  #head .status.typing { color: var(--link); }
+  #view { position: absolute; left: 0; right: 0; top: 60px; bottom: 58px; overflow: hidden;
+          background: radial-gradient(90% 60% at 80% 20%, rgba(98,182,247,.05), transparent),
+                      radial-gradient(70% 50% at 10% 90%, rgba(142,227,181,.04), transparent), var(--chat); }
+  #col { position: absolute; left: 0; right: 0; top: 0; padding: 14px 12px 12px; display: flex;
+         flex-direction: column; gap: 7px; will-change: transform; }
+  #input { position: absolute; left: 0; right: 0; bottom: 0; height: 58px; background: var(--head);
+           display: flex; align-items: center; gap: 10px; padding: 0 14px; z-index: 3;
+           border-top: 1px solid rgba(0,0,0,.35); }
+  #input .clip { font-size: 20px; color: var(--meta); }
+  #input .field { flex: 1; font-size: 15.5px; color: var(--meta); white-space: nowrap; overflow: hidden; }
+  #input .field.has { color: var(--text); }
+  #input .caret { display: inline-block; width: 2px; height: 18px; background: var(--link); vertical-align: -3px;
+                  margin-left: 1px; }
+  #input .send { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+                 color: var(--link); font-size: 18px; }
+
+  .msg { max-width: 86%; font-size: 14.5px; line-height: 1.42; display: none; transform-origin: 0 100%; }
+  .msg.out { align-self: flex-end; transform-origin: 100% 100%; }
+  .bub { background: var(--in); padding: 8px 12px 8px; border-radius: 16px 16px 16px 5px; position: relative;
+         white-space: pre-wrap; word-wrap: break-word; display: flow-root; }
+  .out .bub { background: var(--out); border-radius: 16px 16px 5px 16px; }
+  .bub .t { float: right; font-size: 11px; color: var(--meta); margin: 6px 0 -4px 10px; }
+  .out .bub .t { color: var(--meta-out); }
+  .bub b { font-weight: 700; }
+  .bub i { color: #c7d3de; }
+  .bub a, .lnk { color: var(--link); text-decoration: none; }
+  .bub code { font-family: "SF Mono", Menlo, monospace; font-size: 13px; background: rgba(0,0,0,.22);
+              padding: 1px 5px; border-radius: 5px; color: #b8e1ff; }
+  .kb { display: grid; gap: 4px; margin-top: 4px; }
+  .kb .row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+  .btn { background: var(--btn); border-radius: 9px; height: 36px; display: grid; place-items: center;
+         font-size: 13.5px; font-weight: 600; color: var(--text); position: relative; white-space: nowrap;
+         overflow: hidden; }
+  .btn.on { background: #3a6d9d; }
+  .btn.url::after { content: "↗"; position: absolute; right: 7px; top: 3px; font-size: 11px; color: var(--sub); }
+
+  .todo .line { display: block; }
+  .todo .ind { padding-left: 14px; }
+  .todo .hot { background: rgba(98,182,247,.0); border-radius: 5px; }
+  .bub.file { display: flex !important; gap: 11px; align-items: center; padding: 9px 12px 9px 9px; min-width: 238px; }
+  .fic { width: 42px; height: 42px; border-radius: 50%; background: #4b8ed6; display: grid; place-items: center;
+         font-size: 18px; flex: none; }
+  .fname { font-weight: 600; font-size: 14px; }
+  .fsize { font-size: 12px; color: var(--meta-out); }
+  .photo { border-radius: 14px; overflow: hidden; padding: 0; background: #fff; }
+
+  /* WebAssign question pictures (white, like the real screenshots) */
+  .wa { width: 318px; background: #fff; color: #1d2733; padding: 11px 14px 12px; font-size: 13.5px;
+        line-height: 1.45; font-family: Georgia, "Times New Roman", serif; border-radius: 13px; }
+  .wa .qn { font-family: Inter, sans-serif; font-weight: 700; font-size: 12px; color: #fff; background: #3d6fb6;
+            border-radius: 5px; padding: 1px 7px; margin-right: 6px; }
+  .wa .box { display: inline-block; width: 92px; height: 20px; border: 1.5px solid #8b98a8; border-radius: 3px;
+             vertical-align: middle; margin-left: 4px; background: #f7f9fb; }
+  .wa .opt { margin-top: 5px; font-family: Inter, sans-serif; font-size: 12.5px; color: #34404d; }
+  .wa .opt span { display: inline-block; width: 12px; height: 12px; border: 1.5px solid #8b98a8;
+                  border-radius: 50%; vertical-align: -2px; margin-right: 6px; }
+
+  /* the handwritten sheet */
+  .sheet { width: 250px; height: 116px; position: relative; overflow: hidden; border-radius: 13px;
+           background: repeating-linear-gradient(#fbfaf4 0 27px, #cfdcec 27px 28px), #fbfaf4; }
+  .sheet::before { content: ""; position: absolute; left: 30px; top: 0; bottom: 0; width: 1.5px; background: #eab2b2; }
+  .sheet .hand { position: absolute; left: 40px; top: 18px; transform: rotate(-2.2deg);
+                 font-family: Caveat, cursive; font-size: 27px; line-height: 28px; color: #1f3f86; font-weight: 600; }
+  .sheet .shade { position: absolute; inset: 0; background: linear-gradient(115deg, rgba(0,0,0,.0) 55%, rgba(0,0,0,.09)); }
+
+  /* finger tap */
+  #tap { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%;
+         background: rgba(255,255,255,.35); border: 2px solid rgba(255,255,255,.85); z-index: 20; opacity: 0;
+         pointer-events: none; box-shadow: 0 0 0 0 rgba(255,255,255,.3); }
+
+  /* ---------- scene 1: the tab pile ---------- */
+  #chaos { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+  .win { position: absolute; width: 250px; border-radius: 12px; background: #f3f5f8; color: #243140;
+         box-shadow: 0 18px 40px rgba(0,0,0,.5); overflow: hidden; opacity: 0; font-size: 12px; }
+  .win .bar { height: 26px; background: #dfe4ea; display: flex; align-items: center; gap: 5px; padding: 0 9px; }
+  .win .bar i { width: 8px; height: 8px; border-radius: 50%; background: #c3cad3; display: block; }
+  .win .bar i:nth-child(1) { background: #f06a5f; } .win .bar i:nth-child(2) { background: #f4be4f; }
+  .win .bar i:nth-child(3) { background: #5ec860; }
+  .win .bar span { margin-left: 8px; font-weight: 600; color: #4d5a68; font-size: 11px; white-space: nowrap;
+                   overflow: hidden; text-overflow: ellipsis; }
+  .win .body { padding: 12px 13px 14px; }
+  .win .big { font-weight: 800; font-size: 15px; margin-bottom: 8px; }
+  .win .ln { height: 7px; border-radius: 4px; background: #d3dae2; margin-top: 6px; }
+  .win .pill { display: inline-block; margin-top: 9px; padding: 5px 12px; border-radius: 6px; color: #fff;
+               font-weight: 700; font-size: 11px; }
+  #tabcount { position: absolute; right: 30px; top: 196px; z-index: 6; opacity: 0; font-weight: 700;
+              font-size: 13px; color: #ffd9d4; background: rgba(240,106,95,.22); padding: 6px 12px;
+              border-radius: 99px; border: 1px solid rgba(240,106,95,.45); }
+
+  /* ---------- end card ---------- */
+  #end { position: absolute; inset: 0; z-index: 8; padding: 0 40px; display: flex; flex-direction: column;
+         justify-content: center; pointer-events: none; }
+  #end .l { opacity: 0; }
+  #end .l1 { font-size: 22px; color: var(--sub); font-weight: 600; line-height: 1.3; }
+  #end .l2 { font-size: 44px; font-weight: 800; letter-spacing: -.025em; line-height: 1.08; margin-top: 12px; }
+  #end .l3 { font-size: 44px; font-weight: 800; letter-spacing: -.025em; line-height: 1.08; margin-top: 26px;
+             color: var(--accent); }
+  #end .l4 { margin-top: 34px; font-size: 16.5px; color: var(--sub); line-height: 1.5; font-weight: 500;
+             border-left: 3px solid var(--accent2); padding-left: 14px; }
+  #end .l5 { margin-top: 44px; align-self: flex-start; font-size: 22px; font-weight: 700; padding: 15px 26px;
+             border-radius: 99px; background: var(--accent); color: #07121c; }
+  #end .l5 code { font-family: inherit; }
+
+  #bar { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--accent); z-index: 9; opacity: .8; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="glow"></div>
+
+  <!-- step labels + captions: data-in / data-out in seconds -->
+  <div class="step" data-in="6.2" data-out="46">1 · See everything</div>
+
+  <div class="cap" data-in="0.25" data-out="3.1">
+    <h1>Canvas. WebAssign. Gradescope.</h1>
+    <p>Sign in. Duo. Session expired. Sign in again.</p>
+  </div>
+  <div class="cap" data-in="3.3" data-out="5.6">
+    <h1>Your attention goes to <em>finding</em> the work —</h1>
+    <p>not to doing it.</p>
+  </div>
+  <div class="cap" data-in="6.2" data-out="13.4" data-step="1 · See everything">
+    <h1>One message. <em>Every course.</em></h1>
+    <p>Send <code>/todo</code> — everything due in the next 4 days, one block per course.</p>
+  </div>
+  <div class="cap" data-in="13.6" data-out="22.4" data-step="2 · Hand it in">
+    <h1>Reply a code. <em>You confirm,</em> I hand it in.</h1>
+    <p>Text, a file or a link — nothing is submitted until you tap ✅.</p>
+  </div>
+  <div class="cap" data-in="22.6" data-out="39.4" data-step="3 · Math homework">
+    <h1>Write it on paper. <em>Send one photo.</em></h1>
+    <p>Tap the multiple-choice ones. You see every answer before it goes into WebAssign.</p>
+  </div>
+  <div class="cap" data-in="39.6" data-out="45.8" data-step="4 · Everything else">
+    <h1>Can't do it here yet? <em>One tap</em> gets you there.</h1>
+    <p>ALEKS, Top Hat, Pearson… opened straight to the right page — no Canvas login.</p>
+  </div>
+
+  <div id="chaos">
+    <div id="tabcount">0 tabs open</div>
+  </div>
+
+  <div id="phone">
+    <div id="head">
+      <span class="back">‹</span>
+      <div class="ava">📚</div>
+      <div><div class="name">Canvas Assistant</div><div class="status" id="status">bot</div></div>
+    </div>
+    <div id="view"><div id="col">
+
+      <!-- /todo -->
+      <div class="msg out" data-t="7.2"><div class="bub">/todo<span class="t">9:41</span></div></div>
+      <div class="msg todo" data-t="8.3"><div class="bub">📅 <b>Today → +4 days</b> — reply a code like <b>C2</b>
+
+<b>A · MATH222</b>  (2 to do)
+<span class="ind"><b>A1</b> 🧮 9.4 Homework · Mon 09-28</span>
+<span class="ind"><b>A2</b> 🧮 Quiz 5 · Wed 09-30</span>
+
+<b>B · ENGL100</b>  (1 to do)
+<span class="ind"><b>B1</b> 📎 Essay 1: Final Draft · Tue 09-29</span>
+
+<b>C · CHEM103</b>  (1 to do · 1 ↗)
+<span class="ind"><b>C1</b> ✍️ Lab 3 Reflection · Tue 09-29</span>
+<span class="ind">C2 ↗ <span class="lnk">ALEKS: Objective 4</span> · Thu 10-01</span><span class="t">9:41</span></div>
+        <div class="kb"><div class="row"><div class="btn">📆 Look 14 days ahead</div></div></div>
+      </div>
+
+      <!-- B1: a file, confirmed, handed in -->
+      <div class="msg out" data-t="14.4"><div class="bub">B1<span class="t">9:42</span></div></div>
+      <div class="msg" data-t="15.2"><div class="bub">📌 <b>Essay 1: Final Draft</b>  <i>ENGL100</i>
+due Tue 09-29 23:59 · 50 pts
+📥 Hands in to <b>Canvas</b>, right here.<span class="t">9:42</span></div></div>
+      <div class="msg" data-t="15.9"><div class="bub">Send a file (pdf, docx) and I'll submit it for you.<span class="t">9:42</span></div></div>
+      <div class="msg out" data-t="17.1"><div class="bub file"><div class="fic">📄</div>
+        <div><div class="fname">Essay1_final.pdf</div><div class="fsize">212 KB</div></div></div></div>
+      <div class="msg" data-t="18.0"><div class="bub">📎 1 file (212 KB): Essay1_final.pdf — send more, or ✅
+
+→ submit to <b>Essay 1: Final Draft</b> <i>ENGL100</i>
+Confirm?<span class="t">9:42</span></div>
+        <div class="kb"><div class="row"><div class="btn" data-tap="19.4">✅ Submit all</div><div class="btn">🗑 Remove last</div><div class="btn">✖ Cancel</div></div></div>
+      </div>
+      <div class="msg" data-t="20.0"><div class="bub">✅ Submitted <b>Essay 1: Final Draft</b> <i>ENGL100</i>
+📎 file · attempt 1 · 2026-09-27 14:42 UTC<span class="t">9:42</span></div></div>
+
+      <!-- A1: WebAssign from one photo -->
+      <div class="msg out" data-t="23.6"><div class="bub">A1<span class="t">9:43</span></div></div>
+      <div class="msg" data-t="24.4"><div class="bub"><b>A1 · 9.4 Homework</b> — 3 questions · due Mon 09-28<span class="t">9:43</span></div></div>
+      <div class="msg" data-t="25.0"><div class="photo wa"><span class="qn">1</span>Solve <i>y</i>′ = 2<i>y</i>, &nbsp;<i>y</i>(0) = 3.<br><i>y</i> = <span class="box"></span></div></div>
+      <div class="msg" data-t="25.5"><div class="photo wa"><span class="qn">2</span>Find the general solution of <i>y</i>′ = <i>x</i>/<i>y</i>. Write it implicitly.<br><span class="box" style="width:150px;margin-left:0"></span></div></div>
+      <div class="msg" data-t="26.0"><div class="photo wa"><span class="qn">3</span>Is <i>y</i>″ + <i>t y</i> = sin <i>t</i> linear?
+        <div class="opt"><span></span>linear</div><div class="opt"><span></span>nonlinear</div></div></div>
+      <div class="msg" data-t="26.7"><div class="bub"><b>3.</b> Tap your answer:<span class="t">9:43</span></div>
+        <div class="kb"><div class="row"><div class="btn" data-tap="29.6" data-after="✅ linear">linear</div><div class="btn">nonlinear</div></div></div>
+      </div>
+      <div class="msg" data-t="27.4"><div class="bub">Write the answers for 1, 2 on <b>one sheet</b>, each with its number, then send me <b>one photo</b>.
+I'll read it, show you what I got, and fill it in — then you check the rendered answers and tap Submit.<span class="t">9:43</span></div></div>
+      <div class="msg out" data-t="30.6"><div class="photo sheet"><div class="hand">1. y = 3e<sup style="font-size:19px">2x</sup><br>2. y² = x² + C</div><div class="shade"></div></div></div>
+      <div class="msg" data-t="31.9"><div class="bub"><b>9.4 Homework</b> — I read:
+<b>1.</b> <code>y = 3e^{2x}</code>
+<b>2.</b> <code>y^2 = x^2 + C</code>
+<b>3.</b> 👆 linear
+
+Wrong? Tap a choice again to change it, or send a fixed line.<span class="t">9:43</span></div>
+        <div class="kb"><div class="row"><div class="btn" data-tap="33.9">✅ Fill these in</div><div class="btn">✖ Cancel</div></div></div>
+      </div>
+      <div class="msg" data-t="34.6"><div class="bub">Filled 2 written + 1 tapped answer(s) into <b>9.4 Homework</b>.
+
+Above is exactly what WebAssign will grade. Submit?<span class="t">9:44</span></div>
+        <div class="kb">
+          <div class="row"><div class="btn" data-tap="36.5">✅ Submit</div></div>
+          <div class="row"><div class="btn">✏️ Modify</div><div class="btn">⏸ Later</div></div>
+        </div>
+      </div>
+      <div class="msg" data-t="37.2"><div class="bub">Submitted 3 question(s) in <b>9.4 Homework</b>.
+· 1 / 1 Points
+· 1 / 1 Points
+· 1 / 1 Points<span class="t">9:44</span></div></div>
+
+      <!-- C2: a platform the bot can't work yet -->
+      <div class="msg out" data-t="40.7"><div class="bub">C2<span class="t">9:45</span></div></div>
+      <div class="msg" data-t="41.5"><div class="bub">I can't work on <b>ALEKS</b> yet — do it there. The button opens it directly (no Canvas login needed). It's a one-time link: if it has expired, send <b>C2</b> again for a fresh one.<span class="t">9:45</span></div>
+        <div class="kb"><div class="row"><div class="btn url" data-tap="43.4">↗ Open ALEKS</div></div></div>
+      </div>
+
+    </div></div>
+    <div id="input"><span class="clip">📎</span><div class="field" id="field">Message</div><span class="send">➤</span></div>
+  </div>
+
+  <div id="tap"></div>
+
+  <div id="end">
+    <div class="l l1" data-in="46.4">Your time and attention are the scarcest things you have.</div>
+    <div class="l l2" data-in="47.9">Spend them on thinking.</div>
+    <div class="l l3" data-in="49.6">Leave the busywork to me.</div>
+    <div class="l l4" data-in="51.8">I never write your answers.<br>Nothing is handed in until you confirm.</div>
+    <div class="l l5" data-in="53.8">Send <code>/todo</code> to start →</div>
+  </div>
+
+  <div id="bar"></div>
+</div>
+
+<script>
+const DURATION = 60;
+
+// ---- what the student types (input bar) and when the bot is "typing…"
+const TYPING = [
+  { t0: 6.5, t1: 7.2, text: "/todo" },
+  { t0: 13.9, t1: 14.4, text: "B1" },
+  { t0: 23.1, t1: 23.6, text: "A1" },
+  { t0: 40.2, t1: 40.7, text: "C2" },
+];
+const BOT_TYPING = [[7.4, 8.3], [14.6, 15.9], [17.3, 18.0], [19.6, 20.0], [23.8, 26.7],
+                    [30.9, 31.9], [34.1, 34.6], [36.7, 37.2], [40.9, 41.5]];
+
+// ---- scene 1: the tab pile
+const WINS = [
+  { t: 0.30, x: 30,  y: 250, r: -6, title: "Canvas — Dashboard", big: "Dashboard", pill: ["#d43f3a", "12 To Do"] },
+  { t: 0.75, x: 250, y: 300, r: 5,  title: "WebAssign — 9.4 Homework", big: "9.4 Homework", pill: ["#3d6fb6", "Submit Answer"] },
+  { t: 1.15, x: 60,  y: 470, r: 3,  title: "NetID Login", big: "Sign in with NetID", pill: ["#c5050c", "Log in"] },
+  { t: 1.55, x: 270, y: 520, r: -4, title: "Duo Security", big: "Duo Push sent", pill: ["#2e8540", "Approve on your phone"] },
+  { t: 1.95, x: 20,  y: 660, r: -3, title: "Gradescope — Upload", big: "Submit PDF", pill: ["#1f6f78", "Select pages"] },
+  { t: 2.30, x: 240, y: 700, r: 6,  title: "Canvas — Assignments", big: "Assignments", pill: ["#d43f3a", "Due tonight"] },
+  { t: 2.62, x: 120, y: 380, r: -8, title: "Session expired", big: "Your session has expired", pill: ["#6b7785", "Log in again"] },
+  { t: 2.92, x: 190, y: 610, r: 2,  title: "ALEKS", big: "Objective 4", pill: ["#b85c00", "Continue"] },
+  { t: 3.20, x: 40,  y: 560, r: 7,  title: "Top Hat", big: "Join session", pill: ["#6e3fb5", "Enter code"] },
+  { t: 3.45, x: 230, y: 420, r: -2, title: "Canvas — Syllabus", big: "Syllabus.pdf", pill: ["#d43f3a", "Download"] },
+  { t: 3.70, x: 90,  y: 740, r: -5, title: "NetID Login", big: "Sign in with NetID", pill: ["#c5050c", "Log in"] },
+  { t: 3.95, x: 200, y: 280, r: 4,  title: "Duo Security", big: "Duo Push sent", pill: ["#2e8540", "Approve on your phone"] },
+];
+const chaos = document.getElementById("chaos");
+for (const w of WINS) {
+  const el = document.createElement("div");
+  el.className = "win";
+  el.innerHTML = `<div class="bar"><i></i><i></i><i></i><span>${w.title}</span></div>
+    <div class="body"><div class="big">${w.big}</div><div class="ln" style="width:92%"></div>
+    <div class="ln" style="width:70%"></div><div class="ln" style="width:80%"></div>
+    <span class="pill" style="background:${w.pill[0]}">${w.pill[1]}</span></div>`;
+  w.el = el;
+  chaos.appendChild(el);
+}
+
+// ---- helpers
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = x => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = x => 1 - Math.pow(1 - clamp(x), 3);
+const back = x => { x = clamp(x); const c = 1.5; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const span = (t, a, b) => clamp((t - a) / (b - a));
+
+const $ = s => document.querySelector(s);
+const msgs = [...document.querySelectorAll(".msg")].map(el => ({ el, t: +el.dataset.t }));
+const taps = [...document.querySelectorAll("[data-tap]")].map(el => ({ el, t: +el.dataset.tap,
+             before: el.textContent, after: el.dataset.after }));
+const caps = [...document.querySelectorAll(".cap")];
+const col = $("#col"), view = $("#view"), stage = $("#stage");
+
+// Scroll targets: for each moment a message appears, how far the column must
+// be lifted so the newest message sits at the bottom of the chat.
+let SCROLL = [];
+function measure() {
+  const times = [...new Set(msgs.map(m => m.t))].sort((a, b) => a - b);
+  SCROLL = times.map(t => {
+    for (const m of msgs) m.el.style.display = m.t <= t ? "block" : "none";
+    return { t, s: Math.max(0, col.scrollHeight - view.clientHeight) };
+  });
+}
+
+function scrollAt(t) {
+  let prev = 0, cur = { t: -1, s: 0 };
+  for (const p of SCROLL) { if (p.t <= t) { prev = cur.s; cur = p; } }
+  return prev + (cur.s - prev) * ease((t - cur.t) / 0.45);
+}
+
+function seek(t) {
+  // captions
+  let step = null;
+  for (const c of caps) {
+    const a = +c.dataset.in, b = +c.dataset.out;
+    const o = Math.min(out((t - a) / 0.35), 1 - clamp((t - b + 0.3) / 0.3));
+    c.style.opacity = clamp(o);
+    c.style.transform = `translateY(${(1 - out((t - a) / 0.4)) * 14}px)`;
+    if (t >= a && t < b && c.dataset.step) step = c.dataset.step;
+  }
+  const st = $(".step");
+  st.textContent = step || st.textContent;
+  st.style.opacity = step ? Math.min(out((t - 6.2) / .4), 1 - clamp((t - 45.5) / .3)) : 0;
+
+  // scene 1: windows pile up, then get swept away
+  let n = 0;
+  for (const w of WINS) {
+    const k = out((t - w.t) / 0.28);
+    const sweep = ease(span(t, 5.0, 5.9));
+    if (t >= w.t) n++;
+    const cx = 270 - 125, cy = 560;
+    const x = w.x + (cx - w.x) * sweep, y = w.y + (cy - w.y) * sweep;
+    w.el.style.opacity = t < w.t ? 0 : k * (1 - sweep);
+    w.el.style.transform = `translate(${x}px, ${y + (1 - k) * 30}px) rotate(${w.r * (1 - sweep)}deg) scale(${(0.9 + 0.1 * back((t - w.t) / 0.3)) * (1 - 0.6 * sweep)})`;
+    w.el.style.left = "0px"; w.el.style.top = "0px";
+  }
+  const tc = $("#tabcount");
+  tc.textContent = `${n + 3} tabs open · ${Math.min(4, Math.floor(n / 3) + 1)} logins`;
+  tc.style.opacity = Math.min(out((t - 0.5) / .3), 1 - clamp((t - 5.0) / .4));
+
+  // the phone
+  const ph = $("#phone");
+  const pin = back(span(t, 5.55, 6.35));
+  const pout = ease(span(t, 45.6, 46.3));
+  ph.style.opacity = t < 5.55 ? 0 : clamp(span(t, 5.55, 5.9)) * (1 - pout);
+  ph.style.transform = `translateY(${(1 - pin) * 60 + pout * 40}px) scale(${0.86 + 0.14 * pin - 0.06 * pout})`;
+
+  // messages: shown from their time, popping in
+  for (const m of msgs) {
+    const vis = t >= m.t;
+    m.el.style.display = vis ? "block" : "none";
+    if (vis) {
+      const k = back((t - m.t) / 0.32);
+      m.el.style.opacity = clamp((t - m.t) / 0.15);
+      m.el.style.transform = `translateY(${(1 - k) * 12}px) scale(${0.92 + 0.08 * k})`;
+    }
+  }
+  col.style.transform = `translateY(${-scrollAt(t)}px)`;
+
+  // input bar
+  const f = $("#field");
+  const typ = TYPING.find(x => t >= x.t0 && t < x.t1);
+  if (typ) {
+    const n = Math.ceil(typ.text.length * clamp((t - typ.t0) / ((typ.t1 - typ.t0) * 0.75)));
+    f.innerHTML = typ.text.slice(0, n) + '<span class="caret"></span>';
+    f.className = "field has";
+  } else { f.textContent = "Message"; f.className = "field"; }
+  const typing = BOT_TYPING.some(([a, b]) => t >= a && t < b);
+  const s = $("#status");
+  s.textContent = typing ? "typing" + ".".repeat(1 + Math.floor(t * 3) % 3) : "bot";
+  s.className = typing ? "status typing" : "status";
+
+  // taps: the finger over the button, the button lit, its label changed
+  const finger = $("#tap");
+  let fo = 0;
+  for (const p of taps) {
+    const on = t >= p.t && t < p.t + 0.4;
+    p.el.classList.toggle("on", on);
+    if (p.after) p.el.textContent = t >= p.t + 0.15 ? p.after : p.before;
+    const d = t - p.t;
+    if (d > -0.35 && d < 0.55) {
+      const r = p.el.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+      finger.style.left = (r.left - sr.left + r.width / 2) + "px";
+      finger.style.top = (r.top - sr.top + r.height / 2) + "px";
+      fo = d < 0 ? out((d + 0.35) / 0.25) : 1 - clamp((d - 0.25) / 0.3);
+      const sc = d < 0 ? 1.25 - 0.25 * out((d + 0.35) / 0.35) : 0.85 + 0.6 * out(d / 0.5);
+      finger.style.transform = `scale(${sc})`;
+    }
+  }
+  finger.style.opacity = fo;
+
+  // end card
+  for (const l of document.querySelectorAll("#end .l")) {
+    const a = +l.dataset.in;
+    l.style.opacity = out((t - a) / 0.45);
+    l.style.transform = `translateY(${(1 - out((t - a) / 0.55)) * 18}px)`;
+  }
+  const cta = $("#end .l5");
+  if (t > 54.5) cta.style.transform = `scale(${1 + 0.035 * Math.sin((t - 54.5) * 4.2)})`;
+
+  $("#glow").style.transform = `translate(${Math.sin(t * .3) * 30}px, ${Math.cos(t * .23) * 40}px)`;
+  $("#bar").style.width = (100 * t / DURATION) + "%";
+}
+
+window.seek = seek;
+window.DURATION = DURATION;
+window.ready = document.fonts.ready.then(() => { measure(); seek(0); return true; });
+
+// Scrub by hand: ?t=23.5 or ?play
+const q = new URLSearchParams(location.search);
+window.ready.then(() => {
+  if (q.has("t")) seek(+q.get("t"));
+  if (q.has("play")) {
+    const t0 = performance.now() - 1000 * (+q.get("play") || 0);
+    const loop = () => { const t = (performance.now() - t0) / 1000; seek(t % DURATION); requestAnimationFrame(loop); };
+    loop();
+  }
+});
+</script>
+</body>
+</html>

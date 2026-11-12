@@ -1,0 +1,53 @@
+#!/bin/sh
+# friday-brain pre-commit: refuse commits that add secrets or your private strings.
+#
+# 1. Secret-like file names (.env, *.pem, ...).
+# 2. Added lines that look like API keys / tokens / private keys.
+# 3. Added lines matching any regex in .private-patterns (gitignored, one per
+#    line, e.g. your street address, phone number, student id, Telegram id).
+#    The brain is *meant* to hold facts about you; this is the list of facts
+#    that must never leave your machine even if the repo does.
+#
+# Prints only file and line numbers, never the matched text.
+# Bypass for a deliberate false positive: git commit --no-verify
+fail=0
+names=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$names" ] && exit 0
+
+for f in $names; do
+  case "$f" in
+    .env.example) ;;
+    *.env|.env*|*/.env*|*.key|*.pem|*.p12|*secrets/*|.private-patterns|config.json)
+      echo "pre-commit: blocked file that should stay local: $f"; fail=1;;
+  esac
+done
+
+SECRET='(sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{10,}|xai-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|[0-9]{8,10}:[A-Za-z0-9_-]{35}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[0-9]{1,5}~[A-Za-z0-9]{40,}|(api[_-]?key|secret|token|password)["'"'"' ]*[:=] *["'"'"']?[A-Za-z0-9_\-]{24,})'
+
+root=$(git rev-parse --show-toplevel)
+PRIVATE=""
+if [ -f "$root/.private-patterns" ]; then
+  # join non-empty, non-comment lines with |
+  PRIVATE=$(grep -v '^[[:space:]]*#' "$root/.private-patterns" | grep -v '^[[:space:]]*$' | paste -sd'|' -)
+fi
+
+for f in $names; do
+  added=$(git diff --cached -U0 -- "$f" | grep '^+' | grep -v '^+++')
+  [ -z "$added" ] && continue
+  hits=$(printf '%s\n' "$added" | grep -nEi "$SECRET" | cut -d: -f1 | tr '\n' ' ')
+  if [ -n "$hits" ]; then
+    echo "pre-commit: possible secret in $f (added line #: $hits)"; fail=1
+  fi
+  if [ -n "$PRIVATE" ]; then
+    hits=$(printf '%s\n' "$added" | grep -nEi "$PRIVATE" | cut -d: -f1 | tr '\n' ' ')
+    if [ -n "$hits" ]; then
+      echo "pre-commit: private string (from .private-patterns) in $f (added line #: $hits)"; fail=1
+    fi
+  fi
+done
+
+if [ $fail -ne 0 ]; then
+  echo "pre-commit: commit refused. Keep secrets in .env and private facts out of tracked files."
+  exit 1
+fi
+exit 0

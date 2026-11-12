@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>开机自启动流程图</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1b2330; --muted: #5b6676; --line: #d5dae2;
+    --eager: #0b6e4f; --eager-bg: #e3f4ec;
+    --lazy: #8a4b00; --lazy-bg: #fdf0dc;
+    --ext: #1d4ed8; --ext-bg: #e6edfd;
+    --net: #6d28d9; --net-bg: #efe8fc;
+    --warn: #a11a2b; --warn-bg: #fce8ea;
+    --code-bg: #eef0f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11151b; --panel: #1a2029; --ink: #e6e9ee; --muted: #9aa5b5; --line: #323b48;
+      --eager: #6fd8ae; --eager-bg: #12352a;
+      --lazy: #f2b765; --lazy-bg: #3a2a10;
+      --ext: #8fb0ff; --ext-bg: #17264a;
+      --net: #c3a6ff; --net-bg: #2a1d47;
+      --warn: #ff9aa6; --warn-bg: #42181e;
+      --code-bg: #242c38;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 56px; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 40px 0 12px; }
+  p.lead { color: var(--muted); margin: 0 0 16px; }
+  code {
+    font: 13px/1.4 Consolas, "Cascadia Mono", monospace;
+    background: var(--code-bg); padding: 1px 5px; border-radius: 4px; word-break: break-word;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 24px; }
+  .tag {
+    display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px;
+    border-radius: 999px; border: 1px solid currentColor; white-space: nowrap;
+  }
+  .t-eager { color: var(--eager); background: var(--eager-bg); }
+  .t-lazy  { color: var(--lazy);  background: var(--lazy-bg); }
+  .t-ext   { color: var(--ext);   background: var(--ext-bg); }
+  .t-net   { color: var(--net);   background: var(--net-bg); }
+
+  /* ---- swimlane flow ---- */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+  .lane-head {
+    font-size: 13px; font-weight: 700; color: var(--muted); text-transform: none;
+    padding: 0 4px 8px; border-bottom: 2px solid var(--line); margin-bottom: 14px;
+  }
+  .step { display: contents; }
+  .box {
+    background: var(--panel); border: 1px solid var(--line); border-left-width: 5px;
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 6px;
+  }
+  .box h3 { font-size: 15px; margin: 0 0 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .box ul { margin: 4px 0 0; padding-left: 18px; }
+  .box li { margin: 2px 0; }
+  .box p { margin: 4px 0 0; }
+  .code  { border-left-color: var(--eager); }
+  .code.lazy { border-left-color: var(--lazy); }
+  .ext   { border-left-color: var(--ext); }
+  .net   { border-left-color: var(--net); }
+  .empty { visibility: hidden; margin: 0; padding: 0; border: 0; }
+  .arrow {
+    grid-column: 1 / -1; text-align: center; color: var(--muted);
+    font-size: 18px; line-height: 1; margin: 2px 0 8px;
+  }
+  .arrow small { font-size: 12px; display: block; margin-top: 2px; }
+  .n {
+    display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+    border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 700; flex: none;
+  }
+  .divider {
+    grid-column: 1 / -1; text-align: center; font-weight: 700; margin: 10px 0 18px; padding: 10px;
+    border-radius: 8px; border: 2px dashed var(--eager); color: var(--eager); background: var(--eager-bg);
+  }
+  .divider.lazy { border-color: var(--lazy); color: var(--lazy); background: var(--lazy-bg); }
+  .note {
+    background: var(--warn-bg); color: var(--warn); border: 1px solid currentColor;
+    border-radius: 8px; padding: 10px 14px; margin: 16px 0;
+  }
+  .note b { color: inherit; }
+
+  /* ---- process picture ---- */
+  .proc { display: grid; grid-template-columns: 1.3fr auto 1fr auto 1fr; gap: 10px; align-items: stretch; }
+  .pbox { background: var(--panel); border: 2px solid var(--line); border-radius: 10px; padding: 12px; }
+  .pbox h3 { margin: 0 0 8px; font-size: 15px; }
+  .pbox.bot { border-color: var(--eager); }
+  .pbox.chrome { border-color: var(--ext); }
+  .pbox.cloud { border-color: var(--net); }
+  .thread {
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; margin-top: 6px; font-size: 13.5px;
+    background: var(--bg);
+  }
+  .thread.l { border-style: dashed; border-color: var(--lazy); }
+  .thread b { display: block; }
+  .link { align-self: center; text-align: center; color: var(--muted); font-size: 12.5px; min-width: 84px; }
+  .link span { display: block; font-size: 20px; line-height: 1; }
+
+  table { border-collapse: collapse; width: 100%; background: var(--panel); border-radius: 8px; overflow: hidden; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; font-size: 14px; }
+  th { background: var(--code-bg); font-weight: 700; }
+  .scroll { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
+
+  @media (max-width: 760px) {
+    .lanes { grid-template-columns: 1fr; }
+    .lane-head.right, .empty { display: none; }
+    .proc { grid-template-columns: 1fr; }
+    .link span { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>从登录 Windows 到 bot 就绪：启动流程图</h1>
+  <p class="lead">文字版见 <code>docs/autoopenexplain.md</code>。左栏是本仓库里运行的代码，右栏是被启动的外部进程和被联系的网络服务。自上而下即时间顺序。</p>
+
+  <div class="legend">
+    <span class="tag t-eager">EAGER · 启动时就做</span>
+    <span class="tag t-lazy">LAZY · 第一次用到才做</span>
+    <span class="tag t-ext">外部进程</span>
+    <span class="tag t-net">网络服务</span>
+  </div>
+
+  <h2>一、时间线</h2>
+  <div class="lanes">
+    <div class="lane-head">本仓库的代码</div>
+    <div class="lane-head right">外部进程 / 网络服务</div>
+
+    <!-- 0 -->
+    <div class="box code">
+      <h3><span class="n">0</span> 用户登录 Windows <span class="tag t-eager">EAGER</span></h3>
+      <p>Startup 文件夹（<code>shell:startup</code>）里的 <code>ainl-autostart.lnk</code> 被执行。它由 <code>scripts/autostart_install.ps1</code> 事先创建。</p>
+      <p>是「登录时」而不是「开机时」：密钥在 <b>User</b> 环境变量里，浏览器 profile 也属于这个用户。</p>
+    </div>
+    <div class="box ext">
+      <h3>powershell.exe <span class="tag t-ext">进程</span></h3>
+      <p><code>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File scripts\autostart.ps1</code></p>
+      <p>快捷方式 WindowStyle=7（最小化），不闪控制台。做完就退出。</p>
+    </div>
+    <div class="arrow">▼</div>
+
+    <!-- 1 -->
+    <div class="box code">
+      <h3><span class="n">1</span> <code>scripts/autostart.ps1</code>：等网络 <span class="tag t-eager">EAGER</span></h3>
+      <ul>
+        <li>向 <code>~/.ainl/autostart.log</code> 追加 <code>autostart begin</code></li>
+        <li>最多 30 次 × 间隔 4 秒解析主机名，记 <code>network: True/False</code></li>
+        <li>结果为 False 也继续往下走</li>
+      </ul>
+    </div>
+    <div class="box net">
+      <h3>系统 DNS <span class="tag t-net">网络</span></h3>
+      <p>解析 <code>canvas.wisc.edu</code>。刚登录时网络常未就绪，而 bot 的第一个调用就是 Canvas。</p>
+    </div>
+    <div class="arrow">▼</div>
+
+    <!-- 2 -->
+    <div class="box code">
+      <h3><span class="n">2</span> <code>scripts/browser_start.py</code> <span class="tag t-eager">EAGER</span></h3>
+      <ul>
+        <li>先探测 <code>127.0.0.1:9222/json/version</code>：已在跑就什么都不做</li>
+        <li>找 <code>ms-playwright/chromium-*/chrome-win*/chrome.exe</code></li>
+        <li><code>DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP</code> 脱离式启动，然后自己退出</li>
+        <li>autostart 再轮询端口最多 15 秒</li>
+      </ul>
+    </div>
+    <div class="box ext">
+      <h3>python.exe（短命）→ chrome.exe ×N（常驻）<span class="tag t-ext">进程</span></h3>
+      <p>Playwright 自带 Chromium：<code>--headless=new</code> <code>--remote-debugging-port=9222</code> <code>--user-data-dir=~/.ainl/chrome-profile</code> <code>--disable-gpu</code> <code>--no-proxy-server</code> 及三条防「被遮挡窗口停止渲染」的参数。</p>
+      <p><span class="tag t-net">网络</span> 命令行末尾带 WebAssign 首页地址，所以 chrome 启动瞬间就请求一次 <code>www.webassign.net</code>（重启后处于登出状态，无副作用）。</p>
+    </div>
+    <div class="arrow">▼<small>必须先有浏览器再起 bot：cookie 通道启动时要从它读 cookie</small></div>
+
+    <!-- 3 -->
+    <div class="box code">
+      <h3><span class="n">3</span> <code>scripts/bot_restart.ps1</code> <span class="tag t-eager">EAGER</span></h3>
+      <ul>
+        <li>按<b>完整命令行</b> <code>*-m ainl.bot*</code> 停旧 bot，绝不按进程名</li>
+        <li>从 Windows User 环境读入：<code>CANVAS_TOKEN</code> <code>TELEGRAM_BOT_TOKEN</code> <code>TELEGRAM_CHAT_ID</code> <code>GEMINI_API_KEY</code> <code>CANVAS_BASE_URL</code> <code>AINL_KEEPALIVE_MIN</code>（只按名字，值从不打印）</li>
+        <li>睡 6 秒，输出 <code>bot processes: N</code> 和 <code>bot.log.err</code> 末 2 行</li>
+      </ul>
+    </div>
+    <div class="box ext">
+      <h3>python.exe <code>-m ainl.bot</code>（常驻，隐藏）<span class="tag t-ext">进程</span></h3>
+      <p><code>Start-Process -WindowStyle Hidden</code>；stdout → <code>~/.ainl/bot.log</code>，stderr → <code>~/.ainl/bot.log.err</code>（logging 走 stderr，真正的日志在后者）。</p>
+      <p>同一个 bot token 只能有<b>一个</b> <code>getUpdates</code> 消费者。</p>
+    </div>
+    <div class="arrow">▼</div>
+
+    <!-- 4 -->
+    <div class="box code">
+      <h3><span class="n">4</span> <code>bot/__main__.py</code> → <code>main()</code>：配置与通道 <span class="tag t-eager">EAGER</span></h3>
+      <ul>
+        <li><code>TelegramConfig.from_env()</code>：缺变量 → 退出码 2</li>
+        <li><code>ApiSource.from_env()</code> → <code>channel.open_source()</code>：读 <code>~/.ainl/channel.json</code>；<code>auto</code>/<code>token</code> 且有 token → <code>BearerAuth</code>，<b>不碰浏览器</b></li>
+        <li>钉死的通道打不开 → 改回 <code>auto</code> 再试</li>
+        <li><code>canvas.whoami()</code> 取时区</li>
+      </ul>
+    </div>
+    <div class="box net">
+      <h3>Canvas REST <span class="tag t-net">网络</span></h3>
+      <p><code>GET /api/v1/users/self/profile</code> —— 启动阶段对 Canvas 的唯一一次请求。</p>
+      <p>仅 cookie 通道：MainThread 先起 Playwright 驱动、经 CDP 从 9222 读 cookie（<code>auth_from_live_browser</code>），再 <code>GET /api/v1/users/self</code> 探活。</p>
+    </div>
+    <div class="arrow">▼</div>
+
+    <!-- 5 -->
+    <div class="box code">
+      <h3><span class="n">5</span> 状态、菜单、保活线程 <span class="tag t-eager">EAGER</span></h3>
+      <ul>
+        <li><code>BotState.load(~/.ainl/bot_state.json)</code>：拿回 <code>offset</code> 与进行中的会话</li>
+        <li><code>Conversation(...)</code>：只建对象，<code>_webassign = None</code></li>
+        <li><code>tg.set_commands([...])</code>：失败只告警</li>
+        <li><code>keepalive.start()</code>：起 <code>canvas-keepalive</code> 线程，<b>它先睡 30 分钟</b></li>
+        <li>日志：<code>bot up for chat … (tz …)</code></li>
+      </ul>
+    </div>
+    <div class="box net">
+      <h3>Telegram Bot API <span class="tag t-net">网络</span></h3>
+      <p><code>setMyCommands</code> 一次：注册 <code>/todo /restart /cancel /channel /timing /help</code>。</p>
+    </div>
+    <div class="arrow">▼</div>
+
+    <!-- 6 -->
+    <div class="box code">
+      <h3><span class="n">6</span> 长轮询循环 <span class="tag t-eager">EAGER · 持续</span></h3>
+      <p><code>tg.get_updates(offset=state.offset, timeout=30)</code>。网络异常：告警、睡 5 秒、继续。每条 update：更新 offset → <code>conv.handle(u)</code> → <code>state.save()</code>。</p>
+    </div>
+    <div class="box net">
+      <h3>Telegram Bot API <span class="tag t-net">网络</span></h3>
+      <p><code>getUpdates</code> 长轮询，只订阅 <code>message</code> 与 <code>callback_query</code>。</p>
+    </div>
+
+    <div class="divider">✔ bot 就绪。到这里为止（token 通道）：bot 没连过浏览器、没有 Playwright 驱动、没有 <code>browser-N</code> 线程、没调过 Gemini。</div>
+
+    <div class="divider lazy">▼ 以下全部是 LAZY：第一条消息到达之后才发生</div>
+
+    <!-- 7 -->
+    <div class="box code lazy">
+      <h3><span class="n">7</span> 第一条消息：<code>/todo</code> <span class="tag t-lazy">LAZY</span></h3>
+      <p><code>Conversation.handle()</code> → <code>_todo()</code>。不是 <code>TELEGRAM_CHAT_ID</code> 的聊天直接忽略。是否 WebAssign 从 Canvas 返回的 external tool URL 判断，<b>仍不开浏览器</b>。</p>
+    </div>
+    <div class="box net">
+      <h3>Canvas REST + Telegram <span class="tag t-net">网络</span></h3>
+      <p>planner 与 assignments 查询；<code>sendMessage</code> 回复列表。</p>
+    </div>
+    <div class="arrow">▼<small>学生回复一个 🧮 编号</small></div>
+
+    <!-- 8 -->
+    <div class="box code lazy">
+      <h3><span class="n">8</span> 第一次浏览器操作 <span class="tag t-lazy">LAZY</span></h3>
+      <ul>
+        <li><code>_wa()</code> 才创建 <code>WebAssign(launch_url=…)</code></li>
+        <li><code>link.dep_for()</code> 先查 <code>~/.ainl/lti-map.json</code></li>
+        <li><code>browserthread.run()</code> 创建 worker 线程 <code>browser-1</code></li>
+        <li><code>pw.connect()</code>：该线程首次 <code>sync_playwright().start()</code>，再 <code>connect_over_cdp</code>；连接缓存、不 close</li>
+      </ul>
+    </div>
+    <div class="box ext">
+      <h3>Playwright 驱动 node.exe <span class="tag t-ext">进程</span></h3>
+      <p>bot 的子进程，约 1 秒启动，每线程一个。经 WebSocket（CDP）attach 到 <code>127.0.0.1:9222</code> 的 chrome.exe。</p>
+    </div>
+    <div class="arrow">▼</div>
+
+    <!-- 9 -->
+    <div class="box code lazy">
+      <h3><span class="n">9</span> 重建 WebAssign 会话 <span class="tag t-lazy">LAZY · 重启后第一次必走</span></h3>
+      <p><code>webassign.py::_webassign_tab()</code>：没有已登录标签 → 打开列表页仍登出 → <code>launch_url()</code> → <code>canvas.sessionless_launch()</code> → 浏览器打开启动地址 → 每秒检查是否到达 <code>webassign.net</code>。约 10 秒，<b>无需密码</b>。</p>
+      <p>原因：<code>JSESSIONID</code>、<code>cmp-session-id</code> 是会话级 cookie，浏览器进程一结束就没。</p>
+    </div>
+    <div class="box net">
+      <h3>Canvas REST → LTI → WebAssign / Cengage <span class="tag t-net">网络</span></h3>
+      <p>bot 向 Canvas 要一次性启动地址（它是凭据，从不记录）；chrome.exe 打开它，经 LTI 跳转落到 WebAssign。之后读题、截图都由 chrome.exe 完成。</p>
+    </div>
+    <div class="arrow">▼<small>学生发来答案纸照片</small></div>
+
+    <!-- 10 -->
+    <div class="box code lazy">
+      <h3><span class="n">10</span> 读照片 <span class="tag t-lazy">LAZY</span></h3>
+      <p><code>tg.download()</code> → <code>mathinput/pipeline.py::transcribe_with_consensus()</code> → 默认读者 <code>gemini-flash-lite</code> → LaTeX → WebAssign 方言 MathML。整个系统唯一的 LLM 调用。</p>
+    </div>
+    <div class="box net">
+      <h3>Gemini API <span class="tag t-net">网络</span></h3>
+      <p><code>generativelanguage.googleapis.com</code> 的 <code>generateContent</code>；密钥 <code>GEMINI_API_KEY</code> 走请求头。</p>
+    </div>
+    <div class="arrow">▼<small>与消息无关、按时钟触发</small></div>
+
+    <!-- 11 -->
+    <div class="box code lazy">
+      <h3><span class="n">11</span> 保活 ping <span class="tag t-lazy">启动后 30 分钟起，每 30 分钟</span></h3>
+      <p><code>keepalive.ping()</code>：在 <code>canvas-keepalive</code> 线程里起它自己的驱动、经 CDP 读活 cookie（读不到用磁盘快照），发一次请求，把轮换后的 cookie 写回快照。从不开窗口、从不要密码。</p>
+    </div>
+    <div class="box net">
+      <h3>Canvas REST <span class="tag t-net">网络</span></h3>
+      <p><code>GET /api/v1/users/self</code>。会话「死于无人问津，而不是死于年龄」。</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>看门狗（只在出事时）：</b>某次浏览器操作超出预算 → 放弃当前 <code>browser-N</code>（Python 杀不了线程）→ 以子进程跑 <code>browser_start.py --restart</code>（仍然无窗口）→ <code>browserthread.reset()</code> → 下一次操作新建 <code>browser-(N+1)</code> 和新驱动。代价：WebAssign 会话又没了，步骤 9 再付一次。
+  </div>
+
+  <h2>二、就绪之后常驻的东西</h2>
+  <div class="proc">
+    <div class="pbox bot">
+      <h3>python.exe <code>-m ainl.bot</code></h3>
+      <div class="thread"><b>MainThread</b>getUpdates 长轮询；所有消息在此串行处理</div>
+      <div class="thread"><b>canvas-keepalive（daemon）</b>启动时创建；睡 30 分钟 → ping → 循环</div>
+      <div class="thread l"><b>browser-N（daemon，按需）</b>第一次浏览器操作才创建；独占一个 Playwright 驱动；超时即被放弃</div>
+      <div class="thread l"><b>ThreadPoolExecutor 临时线程</b>仅读照片时</div>
+    </div>
+    <div class="link"><span>⇄</span>CDP WebSocket<br>127.0.0.1:9222<br>（经 node 驱动，LAZY）</div>
+    <div class="pbox chrome">
+      <h3>chrome.exe ×N（headless）</h3>
+      <div class="thread">独立进程，不是任何脚本的子进程</div>
+      <div class="thread">profile：<code>~/.ainl/chrome-profile/</code></div>
+      <div class="thread">Canvas 登录（持久 cookie）跨重启保留；WebAssign 会话 cookie 不保留</div>
+    </div>
+    <div class="link"><span>⇄</span>HTTPS</div>
+    <div class="pbox cloud">
+      <h3>网络服务</h3>
+      <div class="thread"><b>Telegram Bot API</b>← bot，持续</div>
+      <div class="thread"><b>Canvas REST / GraphQL</b>← bot；启动时 1 次，其余按需</div>
+      <div class="thread l"><b>WebAssign / Cengage</b>← chrome.exe，按需</div>
+      <div class="thread l"><b>Gemini API</b>← bot，仅读照片时</div>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:8px">实线框 = 启动时就存在；虚线框 = 按需出现。</p>
+
+  <h2>三、<code>~/.ainl/</code> 下的文件</h2>
+  <div class="scroll">
+  <table>
+    <tr><th>路径</th><th>谁写</th><th>何时读</th><th>说明</th></tr>
+    <tr><td><code>autostart.log</code></td><td><code>autostart.ps1</code></td><td>人工排查</td><td>追加；begin / network / browser / bot / end</td></tr>
+    <tr><td><code>bot.log</code></td><td>bot 的 stdout</td><td>人工排查</td><td>每次启动覆盖；通常几乎为空</td></tr>
+    <tr><td><code>bot.log.err</code></td><td>bot 的 stderr</td><td>人工排查；<code>bot_restart.ps1</code> 读末 2 行</td><td>每次启动覆盖；真正的运行日志。含 chat id，勿外传</td></tr>
+    <tr><td><code>bot_state.json</code></td><td>bot，每条 update 之后</td><td>bot 启动时</td><td>Telegram <code>offset</code> + 每个聊天的 menu / pending / draft / math</td></tr>
+    <tr><td><code>channel.json</code></td><td><code>/channel</code>；启动回退到 <code>auto</code> 时</td><td>bot 启动时</td><td><code>{"prefer": "auto|token|cookie"}</code>；不存在 = auto</td></tr>
+    <tr><td><code>lti-map.json</code></td><td><code>link.dep_for()</code></td><td>打开 WebAssign 项时（LAZY）</td><td>Canvas <code>course:assignment</code> → WebAssign <code>dep</code>，永久缓存</td></tr>
+    <tr><td><code>chrome-profile/</code></td><td>chrome.exe</td><td>chrome.exe 启动时</td><td><code>--user-data-dir</code>；只保留持久 cookie</td></tr>
+    <tr><td><code>&lt;host&gt;.storage_state.json</code></td><td>交互登录；keepalive 写回轮换的 cookie</td><td>cookie 通道读不到活浏览器时</td><td>Canvas 会话快照，等同密码</td></tr>
+    <tr><td><code>wedge-captures.jsonl</code></td><td>看门狗（需开启 <code>AINL_WEDGE_CAPTURE</code>）</td><td>人工排查</td><td>卡死证据；URL 已去掉 query string</td></tr>
+  </table>
+  </div>
+
+  <h2>四、检查与关闭</h2>
+  <div class="scroll">
+  <table>
+    <tr><th>想做什么</th><th>怎么做</th></tr>
+    <tr><td>确认启动成功</td><td>看 <code>~/.ainl/autostart.log</code> 末段：<code>network: True</code> → <code>browser up on 9222</code> 或 <code>already running</code> → <code>bot processes: 1</code> → <code>autostart end</code>；然后在 Telegram 发 <code>/todo</code></td></tr>
+    <tr><td>bot 没起来</td><td>看 <code>~/.ainl/bot.log.err</code></td></tr>
+    <tr><td>关掉自启动</td><td><code>scripts\autostart_install.ps1 -Remove</code>，或 Win+R → <code>shell:startup</code> 删除 <code>ainl-autostart.lnk</code>（只影响下次登录）</td></tr>
+    <tr><td>Canvas 浏览器会话过期</td><td>必须人在场：<code>python scripts/browser_start.py --show</code>，用 NetID + Duo 登录</td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <b>不负责的事：</b>登录之前不启动；Canvas 会话过期需要人登录；断电后第一次 WebAssign 操作多约 10 秒；<b>没有守护进程</b> —— bot 启动失败或崩溃后不会被自动拉起，要等下次登录或手动运行 <code>scripts\bot_restart.ps1</code>。
+  </div>
+
+  <footer>依据 2026-09-21 的代码逐行核对。本页不含任何密钥、chat id 或带凭据的 URL。</footer>
+</main>
+</body>
+</html>
